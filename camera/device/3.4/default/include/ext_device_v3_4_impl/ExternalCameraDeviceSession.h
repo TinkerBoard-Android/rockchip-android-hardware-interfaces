@@ -36,6 +36,7 @@
 #include "utils/Thread.h"
 #include "android-base/unique_fd.h"
 #include "ExternalCameraUtils.h"
+#include "ExternalCameraMemManager.h"
 
 namespace android {
 namespace hardware {
@@ -168,6 +169,9 @@ protected:
         sp<V4L2Frame> frameIn;
         nsecs_t shutterTs;
         std::vector<HalStreamBuffer> buffers;
+        int mShareFd;
+        uint8_t* inData;
+        size_t inDataSize;
     };
 
     Status constructDefaultRequestSettingsRaw(RequestTemplate type,
@@ -217,6 +221,7 @@ protected:
     ssize_t getJpegBufferSize(uint32_t width, uint32_t height) const;
 
     int waitForV4L2BufferReturnLocked(std::unique_lock<std::mutex>& lk);
+    void createPreviewBuffer();
 
     class OutputThread : public android::Thread {
     public:
@@ -266,6 +271,7 @@ protected:
                 size_t &actualCodeSize);
 
         int createJpegLocked(HalStreamBuffer &halBuf, const std::shared_ptr<HalRequest>& req);
+        int jpegDecoder(unsigned int mShareFd, uint8_t* inData, size_t inDataSize);
 
         const wp<ExternalCameraDeviceSession> mParent;
         const CroppingType mCroppingType;
@@ -292,6 +298,33 @@ protected:
 
         std::string mExifMake;
         std::string mExifModel;
+    };
+
+    class FormatConvertThread : public android::Thread {
+    public:
+        FormatConvertThread(sp<OutputThread>& mOutputThread);
+        ~FormatConvertThread();
+        void createJpegDecoder();
+        void destroyJpegDecoder();
+        Status submitRequest(const std::shared_ptr<HalRequest>&);
+        virtual bool threadLoop() override;
+
+        sp <MemManagerBase> mCamMemManager;
+    private:
+        int jpegDecoder(unsigned int mShareFd, uint8_t* inData, size_t inDataSize);
+        void setOutputThread(sp<OutputThread>& mOutputThread);
+        void waitForNextRequest(std::shared_ptr<HalRequest>* out);
+        //void signalRequestDone();
+
+        mjpeg_interface_t mMjpegDecoder;
+        void* mLibstageLibHandle;
+        sp<OutputThread> mFmtOutputThread;
+        mutable std::mutex mRequestListLock;      // Protect acccess to mRequestList,
+                                                  // mProcessingRequest and mProcessingFrameNumer
+        std::condition_variable mRequestCond;     // signaled when a new request is submitted
+        std::list<std::shared_ptr<HalRequest>> mRequestList;
+        static const int kReqWaitTimeoutMs = 33;   // 33ms
+        static const int kReqWaitTimesMax = 90;    // 33ms * 90 ~= 3 sec
     };
 
     // Protect (most of) HIDL interface methods from synchronized-entering
@@ -331,6 +364,7 @@ protected:
 
     // Not protected by mLock (but might be used when mLock is locked)
     sp<OutputThread> mOutputThread;
+    sp<FormatConvertThread> mFormatConvertThread;
 
     // Stream ID -> Camera3Stream cache
     std::unordered_map<int, Stream> mStreamMap;
