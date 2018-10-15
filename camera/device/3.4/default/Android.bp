@@ -71,6 +71,17 @@ cc_library_shared {
         "ExternalCameraDevice.cpp",
         "ExternalCameraDeviceSession.cpp",
         "ExternalCameraUtils.cpp",
+        "RgaCropScale.cpp",
+        "ExternalCameraMemManager.cpp",
+        "ExternalCameraGralloc.cpp"
+    ],
+    include_dirs: [
+        "hardware/rockchip/librkvpu",
+        "hardware/rockchip/librga",
+        "hardware/rockchip/libgralloc"
+    ],
+    header_libs: [
+        "gl_headers",
     ],
     shared_libs: [
         "libhidlbase",
@@ -92,7 +103,9 @@ cc_library_shared {
         "libyuv",
         "libjpeg",
         "libexif",
-        "libtinyxml2"
+        "libtinyxml2",
+        "libui",
+        "librga"
     ],
     static_libs: [
         "android.hardware.camera.common@1.0-helper",
