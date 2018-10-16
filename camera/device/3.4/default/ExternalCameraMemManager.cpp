@@ -235,7 +235,7 @@ int GrallocDrmMemManager::createPreviewBuffer(struct bufferinfo_s* previewbuf)
 
     ret = createGrallocDrmBuffer(previewbuf);
     if (ret == 0) {
-        LOGD("Preview buffer information(phy:0x%lx vir:0x%lx size:0x%x)",
+        LOGD("Preview buffer information(phy:0x%lx vir:0x%lx size:0x%zx)",
             mPreviewBufferInfo->mPhyBaseAddr,
             mPreviewBufferInfo->mVirBaseAddr,
             mPreviewBufferInfo->mBufferSizes);
