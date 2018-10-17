@@ -40,10 +40,10 @@ class RgaCropScale {
     static int CropScaleNV12Or21(struct Params* in, struct Params* out);
     static int rga_nv12_scale_crop(
 		int src_width, int src_height,
-		unsigned int src_fd, unsigned int dst_fd,
+		unsigned long src_fd, unsigned long dst_fd,
 		int dst_width, int dst_height,
-		int zoom_val, bool mirror,
-		bool isNeedCrop, bool isDstNV21, bool is16Align);
+		int zoom_val, bool mirror, bool isNeedCrop,
+		bool isDstNV21, bool is16Align, bool isYuyvFormat);
 
 };
 

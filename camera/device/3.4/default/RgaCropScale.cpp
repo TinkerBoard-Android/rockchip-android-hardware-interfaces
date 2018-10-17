@@ -111,10 +111,10 @@ int RgaCropScale::CropScaleNV12Or21(struct Params* in, struct Params* out)
 
 int RgaCropScale::rga_nv12_scale_crop(
 		int src_width, int src_height,
-		unsigned int src_fd, unsigned int dst_fd,
+		unsigned long src_fd, unsigned long dst_fd,
 		int dst_width, int dst_height,
-		int zoom_val, bool mirror,
-		bool isNeedCrop, bool isDstNV21, bool is16Align)
+		int zoom_val, bool mirror, bool isNeedCrop,
+		bool isDstNV21, bool is16Align, bool isYuyvFormat)
 {
     int ret = 0;
     rga_info_t src,dst;
@@ -125,7 +125,12 @@ int RgaCropScale::rga_nv12_scale_crop(
     RockchipRga& rkRga(RockchipRga::get());
 
     memset(&src, 0, sizeof(rga_info_t));
-    src.fd = src_fd;
+    if (isYuyvFormat) {
+        src.fd = -1;
+        src.virAddr = (void*)src_fd;
+    } else {
+        src.fd = src_fd;
+    }
     src.mmuFlag = ((2 & 0x3) << 4) | 1 | (1 << 8) | (1 << 10);
     memset(&dst, 0, sizeof(rga_info_t));
     dst.fd = dst_fd;

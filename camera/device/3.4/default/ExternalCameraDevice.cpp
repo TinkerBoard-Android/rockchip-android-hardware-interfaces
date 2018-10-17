@@ -38,8 +38,9 @@ namespace {
 // Other formats to consider in the future:
 // * V4L2_PIX_FMT_YVU420 (== YV12)
 // * V4L2_PIX_FMT_YVYU (YVYU: can be converted to YV12 or other YUV420_888 formats)
-const std::array<uint32_t, /*size*/1> kSupportedFourCCs {{
-    V4L2_PIX_FMT_MJPEG
+const std::array<uint32_t, /*size*/2> kSupportedFourCCs {{
+    V4L2_PIX_FMT_MJPEG,
+    V4L2_PIX_FMT_YUYV
 }}; // double braces required in C++11
 
 constexpr int MAX_RETRY = 5; // Allow retry v4l2 open failures a few times.
@@ -793,13 +794,27 @@ ExternalCameraDevice::getCandidateSupportedFormatsLocked(
         .index = 0,
         .type = V4L2_BUF_TYPE_VIDEO_CAPTURE};
     int ret = 0;
+    int isMjpegSupported = false;
+
+    while (TEMP_FAILURE_RETRY(ioctl(fd, VIDIOC_ENUM_FMT, &fmtdesc)) == 0) {
+        ALOGD("mCamDriverSupportFmt: fmt = %d(%s),index = %d",
+        fmtdesc.pixelformat, fmtdesc.description, fmtdesc.index);
+        if (fmtdesc.pixelformat == V4L2_PIX_FMT_MJPEG) {
+            isMjpegSupported = true;
+        }
+        fmtdesc.index++;
+    }
+
+    fmtdesc.index = 0;
     while (ret == 0) {
         ret = TEMP_FAILURE_RETRY(ioctl(fd, VIDIOC_ENUM_FMT, &fmtdesc));
-        ALOGV("index:%d,ret:%d, format:%c%c%c%c", fmtdesc.index, ret,
-                fmtdesc.pixelformat & 0xFF,
-                (fmtdesc.pixelformat >> 8) & 0xFF,
-                (fmtdesc.pixelformat >> 16) & 0xFF,
-                (fmtdesc.pixelformat >> 24) & 0xFF);
+        if (!ret) {
+            ALOGV("fd:%d-index:%d,ret:%d, format:%c%c%c%c", fd,fmtdesc.index, ret,
+                    fmtdesc.pixelformat & 0xFF,
+                    (fmtdesc.pixelformat >> 8) & 0xFF,
+                    (fmtdesc.pixelformat >> 16) & 0xFF,
+                    (fmtdesc.pixelformat >> 24) & 0xFF);
+        }
         if (ret == 0 && !(fmtdesc.flags & V4L2_FMT_FLAG_EMULATED)) {
             auto it = std::find (
                     kSupportedFourCCs.begin(), kSupportedFourCCs.end(), fmtdesc.pixelformat);
@@ -849,7 +864,13 @@ ExternalCameraDevice::getCandidateSupportedFormatsLocked(
 
                         getFrameRateList(fd, fpsUpperBound, &format);
                         if (!format.frameRates.empty()) {
-                            outFmts.push_back(format);
+                            if (isMjpegSupported) {
+                                if (fmtdesc.pixelformat == V4L2_PIX_FMT_MJPEG) {
+                                    outFmts.push_back(format);
+                                }
+                            } else { // YUYV
+                                outFmts.push_back(format);
+                            }
                         }
                     }
                 }

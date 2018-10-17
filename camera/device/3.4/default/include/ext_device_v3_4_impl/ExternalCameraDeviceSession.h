@@ -169,7 +169,7 @@ protected:
         sp<V4L2Frame> frameIn;
         nsecs_t shutterTs;
         std::vector<HalStreamBuffer> buffers;
-        int mShareFd;
+        unsigned long mShareFd;
         uint8_t* inData;
         size_t inDataSize;
     };
@@ -312,6 +312,8 @@ protected:
         sp <MemManagerBase> mCamMemManager;
     private:
         int jpegDecoder(unsigned int mShareFd, uint8_t* inData, size_t inDataSize);
+        void yuyvToNv12(int v4l2_fmt_dst, char *srcbuf, char *dstbuf,
+                int src_w, int src_h,int dst_w, int dst_h);
         void setOutputThread(sp<OutputThread>& mOutputThread);
         void waitForNextRequest(std::shared_ptr<HalRequest>* out);
         //void signalRequestDone();
