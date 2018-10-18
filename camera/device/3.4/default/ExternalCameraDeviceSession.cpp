@@ -113,14 +113,19 @@ ExternalCameraDeviceSession::ExternalCameraDeviceSession(
 
 void ExternalCameraDeviceSession::createPreviewBuffer() {
     struct bufferinfo_s mGrallocBuf;
-    memset(&mGrallocBuf,0,sizeof(struct bufferinfo_s));
+    int tempWidth, tempHeight;
 
+    memset(&mGrallocBuf,0,sizeof(struct bufferinfo_s));
     mGrallocBuf.mNumBffers = mCfg.numVideoBuffers;
-    mGrallocBuf.mPerBuffersize = PAGE_ALIGN(2592*1952*3/2);
+    tempWidth = (mV4l2StreamingFmt.width + 15) & (~15);
+    tempHeight = (mV4l2StreamingFmt.height + 15) & (~15);
+    LOGD("alloc buffer W:H=%dx%d", tempWidth, tempHeight);
+    mGrallocBuf.mPerBuffersize = PAGE_ALIGN(tempWidth * tempHeight * 3 / 2);
     mGrallocBuf.mBufType = PREVIEWBUFFER;
     mFormatConvertThread->mCamMemManager = new GrallocDrmMemManager(false);
-    if(mFormatConvertThread->mCamMemManager->createPreviewBuffer(&mGrallocBuf))
+    if(mFormatConvertThread->mCamMemManager->createPreviewBuffer(&mGrallocBuf)) {
         LOGE("alloc graphic buffer failed !");
+    }
 }
 
 bool ExternalCameraDeviceSession::initialize() {
@@ -129,7 +134,6 @@ bool ExternalCameraDeviceSession::initialize() {
         return true;
     }
     mFormatConvertThread->createJpegDecoder();
-    createPreviewBuffer();
 
     struct v4l2_capability capability;
     int ret = ioctl(mV4l2Fd.get(), VIDIOC_QUERYCAP, &capability);
@@ -1064,7 +1068,7 @@ int ExternalCameraDeviceSession::FormatConvertThread::jpegDecoder(
         return -1;
     }
     if ((srcbuf[0] == 0xff) && (srcbuf[1] == 0xd8) && (srcbuf[2] == 0xff)) {
-        //decoder to NV12
+        // decoder to NV12
         ret = mMjpegDecoder.decode(mMjpegDecoder.decoder,
                 (unsigned char*)&outbuf, &output_len,
                 (unsigned char*)inData, &input_len,
@@ -1072,7 +1076,6 @@ int ExternalCameraDeviceSession::FormatConvertThread::jpegDecoder(
         if (ret < 0) {
             LOGE("mjpeg decode error!");
         }
-        //mCamMemManager->flushCacheMem(PREVIEWBUFFER);
     } else {
         LOGE("mjpeg data error!!");
         return -1;
@@ -1084,19 +1087,18 @@ int ExternalCameraDeviceSession::FormatConvertThread::jpegDecoder(
 void ExternalCameraDeviceSession::FormatConvertThread:: yuyvToNv12(
             int v4l2_fmt_dst, char *srcbuf, char *dstbuf,
             int src_w, int src_h,int dst_w, int dst_h) {
-    int y_size,i;
-    y_size = src_w*src_h;
-    int *dstint_y, *dstint_uv, *srcint;
+    int *dstint_y, *dstint_uv, *srcint, y_size, i;
 
+    y_size = src_w * src_h;
     if (v4l2_fmt_dst == V4L2_PIX_FMT_NV12) {
         if ((src_w == dst_w) && (src_h == dst_h)) {
             dstint_y = (int*)dstbuf;
             srcint = (int*)srcbuf;
             dstint_uv =  (int*)(dstbuf + y_size);
 #if defined(__arm64__) || defined(__aarch64__)
-            for(i=0; i<src_h; i++) {
-                for (int j=0; j<(src_w>>2); j++) {
-                    if(i%2 == 0) {
+            for (i = 0; i < src_h; i++) {
+                for (int j = 0; j < (src_w >> 2); j++) {
+                    if (i % 2 == 0) {
                         *dstint_uv++ = (*(srcint+1) & 0xff000000) |
                                     ((*(srcint+1) & 0x0000ff00) << 8) |
                                     ((*srcint & 0xff000000) >> 16) |
@@ -1110,9 +1112,9 @@ void ExternalCameraDeviceSession::FormatConvertThread:: yuyvToNv12(
                 }
             }
 #else
-            for(i=0; i<src_h; i++) {
+            for (i = 0; i < src_h; i++) {
                 int n = src_w;
-                char tmp = i%2;//get uv only when in even row
+                char tmp = i % 2; // get uv only when in even row
                 asm volatile (
                     "   pld [%[src], %[src_stride], lsl #2]                 \n\t"
                     "   cmp %[n], #16                                       \n\t"
@@ -1136,6 +1138,8 @@ void ExternalCameraDeviceSession::FormatConvertThread:: yuyvToNv12(
             }
 #endif
         }
+    } else {
+        LOGE("don't support this format !");
     }
 }
 
@@ -1178,7 +1182,7 @@ bool ExternalCameraDeviceSession::FormatConvertThread::threadLoop() {
     } else if (req->frameIn->mFourcc == V4L2_PIX_FMT_YUYV) {
         yuyvToNv12(V4L2_PIX_FMT_NV12, (char*)inData,
                 (char*)mVirAddr, tmpW, tmpH, tmpW, tmpH);
-        mShareFd = mVirAddr;//YUYV:rga use vir addr
+        mShareFd = mVirAddr; // YUYV:rga use vir addr
     }
 
     req->mShareFd = mShareFd;
@@ -2086,9 +2090,9 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
         YCbCrLayout input;
         input.y = (uint8_t*)req->mShareFd;
         input.yStride = mYu12Frame->mWidth;
-        input.cb = (uint8_t*)(req->mShareFd) + tempFrameWidth*tempFrameHeight;
-        input.cStride = mYu12Frame->mWidth ;
-        LOGD("format is BLOB or YV12,use software NV12ToI420");
+        input.cb = (uint8_t*)(req->mShareFd) + tempFrameWidth * tempFrameHeight;
+        input.cStride = mYu12Frame->mWidth;
+        LOGD("format is BLOB or YV12, use software NV12ToI420");
 
         int ret = libyuv::NV12ToI420(
                 static_cast<uint8_t*>(input.y),
@@ -2190,7 +2194,6 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
             case PixelFormat::YCBCR_420_888:
             case PixelFormat::IMPLEMENTATION_DEFINED:
             case PixelFormat::YCRCB_420_SP: {
-                ALOGV("tempFrameWidth:tempFrameHeight=%d:%d",tempFrameWidth,tempFrameHeight);
                 const native_handle_t* tmp_hand = (const native_handle_t*)*(halBuf.bufPtr);
                 camera2::RgaCropScale::rga_nv12_scale_crop(
                     tempFrameWidth, tempFrameHeight, req->mShareFd, tmp_hand->data[0],
@@ -2932,6 +2935,8 @@ Status ExternalCameraDeviceSession::configureStreams(
             v4l2Fmt.width, v4l2Fmt.height);
         return Status::INTERNAL_ERROR;
     }
+
+    createPreviewBuffer();
 
     Size v4lSize = {v4l2Fmt.width, v4l2Fmt.height};
     Size thumbSize { 0, 0 };
