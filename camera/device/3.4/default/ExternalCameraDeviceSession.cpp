@@ -2593,7 +2593,7 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
     if ((bufferSize == 0) || (bufferSize > expectedMaxBufferSize)) {
         ALOGE("%s: V4L2 buffer size: %u looks invalid. Expected maximum size: %u", __FUNCTION__,
                 bufferSize, expectedMaxBufferSize);
-        return -EINVAL;
+        //return -EINVAL;
     }
     mMaxV4L2BufferSize = bufferSize;
 
@@ -2878,7 +2878,7 @@ Status ExternalCameraDeviceSession::configureStreams(
     uint32_t maxDim = 0;
     for (const auto& stream : config.streams) {
         float aspectRatio = ASPECT_RATIO(stream);
-        ALOGI("%s: request stream %dx%d", __FUNCTION__, stream.width, stream.height);
+        ALOGI("%s: request stream %dx%d, format: 0x%x", __FUNCTION__, stream.width, stream.height, stream.format);
         if ((mCroppingType == VERTICAL && aspectRatio < desiredAr) ||
                 (mCroppingType == HORIZONTAL && aspectRatio > desiredAr)) {
             desiredAr = aspectRatio;
