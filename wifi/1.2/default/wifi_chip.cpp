@@ -108,8 +108,10 @@ std::string getP2pIfaceName() {
 	    check_wifi_chip_type_string(wifi_type);
     }
     if (0 == strncmp(wifi_type, "AP", 2)) {
+	property_set("wifi.direct.interface", "p2p-dev-wlan0");
 	property_get("wifi.direct.interface", buffer.data(), "p2p-dev-wlan0");
     } else {
+	property_set("wifi.direct.interface", "p2p0");
 	property_get("wifi.direct.interface", buffer.data(), "p2p0");
     }
     return buffer.data();
