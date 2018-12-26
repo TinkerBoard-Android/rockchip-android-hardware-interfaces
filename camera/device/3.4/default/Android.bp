@@ -78,7 +78,6 @@ cc_library_shared {
     include_dirs: [
         "hardware/rockchip/librkvpu",
         "hardware/rockchip/librga",
-        "hardware/rockchip/libgralloc"
     ],
     header_libs: [
         "gl_headers",
