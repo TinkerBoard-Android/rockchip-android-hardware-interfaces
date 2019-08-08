@@ -34,6 +34,8 @@
 #include "RgaCropScale.h"
 #include "vpu_global.h"
 
+#include "ExternalCameraGralloc.h"
+
 namespace android {
 namespace hardware {
 namespace camera {
@@ -2194,9 +2196,23 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
             case PixelFormat::YCBCR_420_888:
             case PixelFormat::IMPLEMENTATION_DEFINED:
             case PixelFormat::YCRCB_420_SP: {
+                int handle_fd = -1, ret;
+                gralloc_module_t const* mGrallocModule;
+                const hw_module_t *allocMod = NULL;
                 const native_handle_t* tmp_hand = (const native_handle_t*)*(halBuf.bufPtr);
+                ret= hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &allocMod);
+                mGrallocModule = reinterpret_cast<gralloc_module_t const *>(allocMod);
+                mGrallocModule->perform(
+                        mGrallocModule,
+                        GRALLOC_MODULE_PERFORM_GET_HADNLE_PRIME_FD,
+                        tmp_hand,
+                        &handle_fd);
+                if (handle_fd == -1) {
+                    LOGE("convert tmp_hand to dst_fd error");
+                    return -EINVAL;
+                }
                 camera2::RgaCropScale::rga_nv12_scale_crop(
-                    tempFrameWidth, tempFrameHeight, req->mShareFd, tmp_hand->data[0],
+                    tempFrameWidth, tempFrameHeight, req->mShareFd, handle_fd,
                     halBuf.width, halBuf.height, 100, false, true,
                     (halBuf.format == PixelFormat::YCRCB_420_SP), is16Align,
                     req->frameIn->mFourcc == V4L2_PIX_FMT_YUYV);
