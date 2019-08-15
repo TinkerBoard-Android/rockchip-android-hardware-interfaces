@@ -60,6 +60,8 @@ struct VmsLayer {
 };
 
 struct VmsLayerAndPublisher {
+    VmsLayerAndPublisher(VmsLayer layer, int publisher_id)
+        : layer(layer), publisher_id(publisher_id) {}
     VmsLayer layer;
     int publisher_id;
 };
@@ -105,6 +107,17 @@ struct VmsAvailabilityState {
     std::vector<VmsAssociatedLayer> associated_layers;
 };
 
+// An enum to represent the result of parsing START_SESSION message from the VMS service.
+enum VmsSessionStatus {
+    // When a new session is received, the client should acknowledge it with the correct
+    // IDs in the START_SESSION message.
+    kNewServerSession,
+    // When an acknowledgement it received, the client can start using the connection.
+    kAckToCurrentSession,
+    // Invalid message with either invalid format or unexpected data.
+    kInvalidMessage
+};
+
 // Creates an empty base VMS message with some pre-populated default fields.
 std::unique_ptr<VehiclePropValue> createBaseVmsMessage(size_t message_size);
 
@@ -144,12 +157,26 @@ std::unique_ptr<VehiclePropValue> createAvailabilityRequest();
 std::unique_ptr<VehiclePropValue> createSubscriptionsRequest();
 
 // Creates a VehiclePropValue containing a message of type VmsMessageType.DATA.
-// Returns a nullptr if the byte string in bytes is empty.
+// Returns a nullptr if the vms_packet string in bytes is empty or if the layer_publisher
+// information in VmsLayerAndPublisher format is missing the later or publisher
+// information.
 //
-// For example, to build a VehiclePropMessage containing a proto, the caller
-// should convert the proto to a byte string using the SerializeToString proto
-// API, then use this inteface to build the VehicleProperty.
-std::unique_ptr<VehiclePropValue> createDataMessage(const std::string& bytes);
+// For example, to build a VehiclePropValue message containing a proto, the caller
+// should first convert the proto to a byte string (vms_packet) using the
+// SerializeToString proto API. Then, it use this interface to build the VehicleProperty
+// by passing publisher and layer information (layer_publisher) and the vms_packet.
+std::unique_ptr<VehiclePropValue> createDataMessageWithLayerPublisherInfo(
+        const VmsLayerAndPublisher& layer_publisher, const std::string& vms_packet);
+
+// Creates a VehiclePropValue containing a message of type
+// VmsMessageType.PUBLISHER_ID_REQUEST with the given publisher information.
+// Returns a nullptr if the input is empty.
+std::unique_ptr<VehiclePropValue> createPublisherIdRequest(
+        const std::string& vms_provider_description);
+
+// Creates a VehiclePropValue message of type VmsMessageType.START_SESSION.
+std::unique_ptr<VehiclePropValue> createStartSessionMessage(const int service_id,
+                                                            const int client_id);
 
 // Returns true if the VehiclePropValue pointed to by value contains a valid Vms
 // message, i.e. the VehicleProperty, VehicleArea, and VmsMessageType are all
@@ -168,12 +195,6 @@ VmsMessageType parseMessageType(const VehiclePropValue& value);
 // A proto message can then be constructed by passing the result of this
 // function to ParseFromString.
 std::string parseData(const VehiclePropValue& value);
-
-// Creates a VehiclePropValue containing a message of type
-// VmsMessageType.PUBLISHER_ID_REQUEST with the given publisher information.
-// Returns a nullptr if the input is empty.
-std::unique_ptr<VehiclePropValue> createPublisherIdRequest(
-        const std::string& vms_provider_description);
 
 // Returns the publisher ID by parsing the VehiclePropValue containing the ID.
 // Returns null if the message is invalid.
@@ -203,6 +224,12 @@ std::vector<VmsLayer> getSubscribedLayers(const VehiclePropValue& subscription_c
 // If the message has a sequence number 0, it means that the service
 // has newly started or restarted.
 bool hasServiceNewlyStarted(const VehiclePropValue& availability_change);
+
+// Takes a start session message, current service ID, current client ID; and returns the type/status
+// of the message. It also populates the new service ID with the correct value.
+VmsSessionStatus parseStartSessionMessage(const VehiclePropValue& start_session,
+                                          const int current_service_id, const int current_client_id,
+                                          int* new_service_id);
 
 }  // namespace vms
 }  // namespace V2_0

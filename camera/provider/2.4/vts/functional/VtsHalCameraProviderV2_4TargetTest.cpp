@@ -54,8 +54,10 @@
 #include <ui/GraphicBuffer.h>
 
 #include <android/hardware/graphics/allocator/2.0/IAllocator.h>
+#include <android/hardware/graphics/allocator/3.0/IAllocator.h>
 #include <android/hardware/graphics/mapper/2.0/IMapper.h>
 #include <android/hardware/graphics/mapper/2.0/types.h>
+#include <android/hardware/graphics/mapper/3.0/IMapper.h>
 #include <android/hidl/allocator/1.0/IAllocator.h>
 #include <android/hidl/memory/1.0/IMapper.h>
 #include <android/hidl/memory/1.0/IMemory.h>
@@ -605,7 +607,9 @@ public:
 
     struct DeviceCb : public V3_5::ICameraDeviceCallback {
         DeviceCb(CameraHidlTest *parent, int deviceVersion, const camera_metadata_t *staticMeta) :
-                mParent(parent), mDeviceVersion(deviceVersion), mStaticMetadata(staticMeta) {}
+                mParent(parent), mDeviceVersion(deviceVersion) {
+            mStaticMetadata = staticMeta;
+        }
 
         Return<void> processCaptureResult_3_4(
                 const hidl_vec<V3_4::CaptureResult>& results) override;
@@ -629,7 +633,7 @@ public:
 
         CameraHidlTest *mParent; // Parent object
         int mDeviceVersion;
-        const camera_metadata_t *mStaticMetadata;
+        android::hardware::camera::common::V1_0::helper::CameraMetadata mStaticMetadata;
         bool hasOutstandingBuffersLocked();
 
         /* members for requestStreamBuffers() and returnStreamBuffers()*/
@@ -753,7 +757,8 @@ public:
             uint32_t *partialResultCount /*out*/,
             bool *useHalBufManager /*out*/,
             sp<DeviceCb> *cb /*out*/,
-            uint32_t streamConfigCounter = 0);
+            uint32_t streamConfigCounter = 0,
+            bool allowUnsupport = false);
     void configurePreviewStream(const std::string &name, int32_t deviceVersion,
             sp<ICameraProvider> provider,
             const AvailableStream *previewThreshold,
@@ -1191,18 +1196,20 @@ bool CameraHidlTest::DeviceCb::processCaptureResultLocked(const CaptureResult& r
         // Verify final result metadata
         bool isAtLeast_3_5 = mDeviceVersion >= CAMERA_DEVICE_API_VERSION_3_5;
         if (isAtLeast_3_5) {
+            auto staticMetadataBuffer = mStaticMetadata.getAndLock();
             bool isMonochrome = Status::OK ==
-                    CameraHidlTest::isMonochromeCamera(mStaticMetadata);
+                    CameraHidlTest::isMonochromeCamera(staticMetadataBuffer);
             if (isMonochrome) {
                 mParent->verifyMonochromeCameraResult(request->collectedResult);
             }
 
             // Verify logical camera result metadata
             bool isLogicalCamera =
-                    Status::OK == CameraHidlTest::isLogicalMultiCamera(mStaticMetadata);
+                    Status::OK == CameraHidlTest::isLogicalMultiCamera(staticMetadataBuffer);
             if (isLogicalCamera) {
-                mParent->verifyLogicalCameraResult(mStaticMetadata, request->collectedResult);
+                mParent->verifyLogicalCameraResult(staticMetadataBuffer, request->collectedResult);
             }
+            mStaticMetadata.unlock(staticMetadataBuffer);
         }
     }
 
@@ -1231,7 +1238,14 @@ bool CameraHidlTest::DeviceCb::processCaptureResultLocked(const CaptureResult& r
     }
 
     if (mUseHalBufManager) {
-        returnStreamBuffers(results.outputBuffers);
+        // Don't return buffers of bufId 0 (empty buffer)
+        std::vector<StreamBuffer> buffers;
+        for (const auto& sb : results.outputBuffers) {
+            if (sb.bufferId != 0) {
+                buffers.push_back(sb);
+            }
+        }
+        returnStreamBuffers(buffers);
     }
     return notify;
 }
@@ -4046,7 +4060,7 @@ TEST_F(CameraHidlTest, processMultiCaptureRequestPreview) {
 
     for (const auto& name : cameraDeviceNames) {
         int deviceVersion = getCameraDeviceVersion(name, mProviderType);
-        if (deviceVersion < CAMERA_DEVICE_API_VERSION_3_4) {
+        if (deviceVersion < CAMERA_DEVICE_API_VERSION_3_5) {
             continue;
         }
         std::string version, deviceId;
@@ -4118,8 +4132,13 @@ TEST_F(CameraHidlTest, processMultiCaptureRequestPreview) {
         configurePreviewStreams3_4(name, deviceVersion, mProvider, &previewThreshold, physicalIds,
                 &session3_4, &session3_5, &previewStream, &halStreamConfig /*out*/,
                 &supportsPartialResults /*out*/, &partialResultCount /*out*/,
-                &useHalBufManager /*out*/, &cb /*out*/);
-        ASSERT_NE(session3_4, nullptr);
+                &useHalBufManager /*out*/, &cb /*out*/, 0 /*streamConfigCounter*/,
+                true /*allowUnsupport*/);
+        if (session3_5 == nullptr) {
+            ret = session3_4->close();
+            ASSERT_TRUE(ret.isOk());
+            continue;
+        }
 
         std::shared_ptr<ResultMetadataQueue> resultQueue;
         auto resultQueueRet =
@@ -5165,7 +5184,8 @@ void CameraHidlTest::configurePreviewStreams3_4(const std::string &name, int32_t
         uint32_t *partialResultCount /*out*/,
         bool *useHalBufManager /*out*/,
         sp<DeviceCb> *outCb /*out*/,
-        uint32_t streamConfigCounter) {
+        uint32_t streamConfigCounter,
+        bool allowUnsupport) {
     ASSERT_NE(nullptr, session3_4);
     ASSERT_NE(nullptr, session3_5);
     ASSERT_NE(nullptr, halStreamConfig);
@@ -5263,6 +5283,28 @@ void CameraHidlTest::configurePreviewStreams3_4(const std::string &name, int32_t
             config3_4.sessionParams = req;
             });
     ASSERT_TRUE(ret.isOk());
+
+    ASSERT_TRUE(!allowUnsupport || deviceVersion == CAMERA_DEVICE_API_VERSION_3_5);
+    if (allowUnsupport) {
+        sp<device::V3_5::ICameraDevice> cameraDevice3_5;
+        castDevice(device3_x, deviceVersion, &cameraDevice3_5);
+
+        bool supported = false;
+        ret = cameraDevice3_5->isStreamCombinationSupported(config3_4,
+                [&supported](Status s, bool combStatus) {
+                    ASSERT_TRUE((Status::OK == s) ||
+                            (Status::METHOD_NOT_SUPPORTED == s));
+                    if (Status::OK == s) {
+                        supported = combStatus;
+                    }
+                });
+        ASSERT_TRUE(ret.isOk());
+        // If stream combination is not supported, return null session.
+        if (!supported) {
+            *session3_5 = nullptr;
+            return;
+        }
+    }
 
     if (*session3_5 != nullptr) {
         config3_5.v3_4 = config3_4;
@@ -5366,7 +5408,7 @@ void CameraHidlTest::configurePreviewStream(const std::string &name, int32_t dev
         ASSERT_EQ(Status::OK, s);
         staticMeta = clone_camera_metadata(
                 reinterpret_cast<const camera_metadata_t*>(metadata.data()));
-         ASSERT_NE(nullptr, staticMeta);
+        ASSERT_NE(nullptr, staticMeta);
     });
     ASSERT_TRUE(ret.isOk());
 
@@ -6104,36 +6146,66 @@ void CameraHidlTest::allocateGraphicBuffer(uint32_t width, uint32_t height, uint
 
     sp<android::hardware::graphics::allocator::V2_0::IAllocator> allocator =
         android::hardware::graphics::allocator::V2_0::IAllocator::getService();
-    ASSERT_NE(nullptr, allocator.get());
+    sp<android::hardware::graphics::allocator::V3_0::IAllocator> allocatorV3 =
+        android::hardware::graphics::allocator::V3_0::IAllocator::getService();
 
+    sp<android::hardware::graphics::mapper::V3_0::IMapper> mapperV3 =
+        android::hardware::graphics::mapper::V3_0::IMapper::getService();
     sp<android::hardware::graphics::mapper::V2_0::IMapper> mapper =
         android::hardware::graphics::mapper::V2_0::IMapper::getService();
-    ASSERT_NE(mapper.get(), nullptr);
-
-    android::hardware::graphics::mapper::V2_0::IMapper::BufferDescriptorInfo descriptorInfo {};
-    descriptorInfo.width = width;
-    descriptorInfo.height = height;
-    descriptorInfo.layerCount = 1;
-    descriptorInfo.format = format;
-    descriptorInfo.usage = usage;
-
     ::android::hardware::hidl_vec<uint32_t> descriptor;
-    auto ret = mapper->createDescriptor(
-        descriptorInfo, [&descriptor](android::hardware::graphics::mapper::V2_0::Error err,
-                            ::android::hardware::hidl_vec<uint32_t> desc) {
-            ASSERT_EQ(err, android::hardware::graphics::mapper::V2_0::Error::NONE);
-            descriptor = desc;
-        });
-    ASSERT_TRUE(ret.isOk());
+    if (mapperV3 != nullptr && allocatorV3 != nullptr) {
+        android::hardware::graphics::mapper::V3_0::IMapper::BufferDescriptorInfo descriptorInfo {};
+        descriptorInfo.width = width;
+        descriptorInfo.height = height;
+        descriptorInfo.layerCount = 1;
+        descriptorInfo.format =
+                static_cast<android::hardware::graphics::common::V1_2::PixelFormat>(format);
+        descriptorInfo.usage = usage;
 
-    ret = allocator->allocate(descriptor, 1u,
-        [&](android::hardware::graphics::mapper::V2_0::Error err, uint32_t /*stride*/,
-            const ::android::hardware::hidl_vec<::android::hardware::hidl_handle>& buffers) {
-            ASSERT_EQ(android::hardware::graphics::mapper::V2_0::Error::NONE, err);
-            ASSERT_EQ(buffers.size(), 1u);
-            *buffer_handle = buffers[0];
-        });
-    ASSERT_TRUE(ret.isOk());
+        auto ret = mapperV3->createDescriptor(
+            descriptorInfo, [&descriptor](android::hardware::graphics::mapper::V3_0::Error err,
+                                ::android::hardware::hidl_vec<uint32_t> desc) {
+                ASSERT_EQ(err, android::hardware::graphics::mapper::V3_0::Error::NONE);
+                descriptor = desc;
+            });
+        ASSERT_TRUE(ret.isOk());
+
+        ret = allocatorV3->allocate(descriptor, 1u,
+            [&](android::hardware::graphics::mapper::V3_0::Error err, uint32_t /*stride*/,
+                const ::android::hardware::hidl_vec<::android::hardware::hidl_handle>& buffers) {
+                ASSERT_EQ(android::hardware::graphics::mapper::V3_0::Error::NONE, err);
+                ASSERT_EQ(buffers.size(), 1u);
+                *buffer_handle = buffers[0];
+            });
+        ASSERT_TRUE(ret.isOk());
+    } else {
+        ASSERT_NE(mapper.get(), nullptr);
+        ASSERT_NE(allocator.get(), nullptr);
+        android::hardware::graphics::mapper::V2_0::IMapper::BufferDescriptorInfo descriptorInfo {};
+        descriptorInfo.width = width;
+        descriptorInfo.height = height;
+        descriptorInfo.layerCount = 1;
+        descriptorInfo.format = format;
+        descriptorInfo.usage = usage;
+
+        auto ret = mapper->createDescriptor(
+            descriptorInfo, [&descriptor](android::hardware::graphics::mapper::V2_0::Error err,
+                                ::android::hardware::hidl_vec<uint32_t> desc) {
+                ASSERT_EQ(err, android::hardware::graphics::mapper::V2_0::Error::NONE);
+                descriptor = desc;
+            });
+        ASSERT_TRUE(ret.isOk());
+
+        ret = allocator->allocate(descriptor, 1u,
+            [&](android::hardware::graphics::mapper::V2_0::Error err, uint32_t /*stride*/,
+                const ::android::hardware::hidl_vec<::android::hardware::hidl_handle>& buffers) {
+                ASSERT_EQ(android::hardware::graphics::mapper::V2_0::Error::NONE, err);
+                ASSERT_EQ(buffers.size(), 1u);
+                *buffer_handle = buffers[0];
+            });
+        ASSERT_TRUE(ret.isOk());
+    }
 }
 
 void CameraHidlTest::verifyRecommendedConfigs(const CameraMetadata& chars) {

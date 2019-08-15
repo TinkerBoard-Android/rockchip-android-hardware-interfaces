@@ -21,6 +21,7 @@
 #include <composer-vts/2.1/GraphicsComposerCallback.h>
 #include <composer-vts/2.1/TestCommandReader.h>
 #include <mapper-vts/2.0/MapperVts.h>
+#include <mapper-vts/3.0/MapperVts.h>
 
 #include <VtsHalHidlTargetTestBase.h>
 #include <VtsHalHidlTargetTestEnvBase.h>
@@ -47,8 +48,6 @@ using android::hardware::graphics::common::V1_0::ColorTransform;
 using android::hardware::graphics::common::V1_0::Dataspace;
 using android::hardware::graphics::common::V1_0::PixelFormat;
 using android::hardware::graphics::common::V1_0::Transform;
-using android::hardware::graphics::mapper::V2_0::IMapper;
-using android::hardware::graphics::mapper::V2_0::vts::Gralloc;
 using GrallocError = android::hardware::graphics::mapper::V2_0::Error;
 
 // Test environment for graphics.composer
@@ -669,7 +668,6 @@ class GraphicsComposerHidlCommandTest : public GraphicsComposerHidlTest {
         ASSERT_NO_FATAL_FAILURE(GraphicsComposerHidlTest::SetUp());
 
         ASSERT_NO_FATAL_FAILURE(mGralloc = std::make_unique<Gralloc>());
-
         Config activeConfig = mComposerClient->getActiveConfig(mPrimaryDisplay);
         mDisplayWidth = mComposerClient->getDisplayAttribute(mPrimaryDisplay, activeConfig,
                                                              IComposerClient::Attribute::WIDTH);
@@ -685,16 +683,10 @@ class GraphicsComposerHidlCommandTest : public GraphicsComposerHidlTest {
     }
 
     const native_handle_t* allocate() {
-        IMapper::BufferDescriptorInfo info{};
-        info.width = mDisplayWidth;
-        info.height = mDisplayHeight;
-        info.layerCount = 1;
-        info.format = PixelFormat::RGBA_8888;
-        info.usage =
-            static_cast<uint64_t>(BufferUsage::CPU_WRITE_OFTEN | BufferUsage::CPU_READ_OFTEN |
-                                  BufferUsage::COMPOSER_OVERLAY);
-
-        return mGralloc->allocate(info);
+        uint64_t usage =
+                static_cast<uint64_t>(BufferUsage::CPU_WRITE_OFTEN | BufferUsage::CPU_READ_OFTEN |
+                                      BufferUsage::COMPOSER_OVERLAY);
+        return mGralloc->allocate(mDisplayWidth, mDisplayHeight, 1, PixelFormat::RGBA_8888, usage);
     }
 
     void execute() { mComposerClient->execute(mReader.get(), mWriter.get()); }
@@ -705,7 +697,7 @@ class GraphicsComposerHidlCommandTest : public GraphicsComposerHidlTest {
     int32_t mDisplayHeight;
 
    private:
-    std::unique_ptr<Gralloc> mGralloc;
+     std::unique_ptr<Gralloc> mGralloc;
 };
 
 /**
@@ -798,7 +790,7 @@ TEST_F(GraphicsComposerHidlCommandTest, PRESENT_DISPLAY) {
 TEST_F(GraphicsComposerHidlCommandTest, PRESENT_DISPLAY_NO_LAYER_STATE_CHANGES) {
     mWriter->selectDisplay(mPrimaryDisplay);
     mComposerClient->setPowerMode(mPrimaryDisplay, IComposerClient::PowerMode::ON);
-    mComposerClient->setColorMode(mPrimaryDisplay, ColorMode::SRGB);
+    mComposerClient->setColorMode(mPrimaryDisplay, ColorMode::NATIVE);
 
     auto handle = allocate();
     ASSERT_NE(nullptr, handle);
@@ -850,10 +842,37 @@ TEST_F(GraphicsComposerHidlCommandTest, SET_LAYER_CURSOR_POSITION) {
     ASSERT_NO_FATAL_FAILURE(layer =
                                 mComposerClient->createLayer(mPrimaryDisplay, kBufferSlotCount));
 
+    auto handle = allocate();
+    ASSERT_NE(nullptr, handle);
+    IComposerClient::Rect displayFrame{0, 0, mDisplayWidth, mDisplayHeight};
+
     mWriter->selectDisplay(mPrimaryDisplay);
     mWriter->selectLayer(layer);
+    mWriter->setLayerBuffer(0, handle, -1);
+    mWriter->setLayerCompositionType(IComposerClient::Composition::CURSOR);
+    mWriter->setLayerDisplayFrame(displayFrame);
+    mWriter->setLayerPlaneAlpha(1);
+    mWriter->setLayerSourceCrop({0, 0, (float)mDisplayWidth, (float)mDisplayHeight});
+    mWriter->setLayerTransform(static_cast<Transform>(0));
+    mWriter->setLayerVisibleRegion(std::vector<IComposerClient::Rect>(1, displayFrame));
+    mWriter->setLayerZOrder(10);
+    mWriter->setLayerBlendMode(IComposerClient::BlendMode::NONE);
+    mWriter->setLayerSurfaceDamage(std::vector<IComposerClient::Rect>(1, displayFrame));
+    mWriter->setLayerDataspace(Dataspace::UNKNOWN);
+    mWriter->validateDisplay();
+
+    execute();
+    if (mReader->mCompositionChanges.size() != 0) {
+        GTEST_SUCCEED() << "Composition change requested, skipping test";
+        return;
+    }
+    mWriter->presentDisplay();
+    ASSERT_EQ(0, mReader->mErrors.size());
+
     mWriter->setLayerCursorPosition(1, 1);
     mWriter->setLayerCursorPosition(0, 0);
+    mWriter->validateDisplay();
+    mWriter->presentDisplay();
     execute();
 }
 
