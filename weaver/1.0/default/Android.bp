@@ -7,7 +7,7 @@ cc_prebuilt_library_shared {
 
     multilib: {
 	lib64: {
-	    srcs: ["lib64/libRkTeeWeaverso"],
+	    srcs: ["lib64/libRkTeeWeaver.so"],
 	},
 	lib32: {
 	    srcs: ["lib/libRkTeeWeaver.so"],
