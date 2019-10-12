@@ -1179,6 +1179,7 @@ bool ExternalCameraDeviceSession::FormatConvertThread::threadLoop() {
         int ret = jpegDecoder(mShareFd, inData, inDataSize);
         if(ret) {
             LOGE("mjpeg decode failed");
+            mFmtOutputThread->submitRequest(req);
             return true;
         }
     } else if (req->frameIn->mFourcc == V4L2_PIX_FMT_YUYV) {
@@ -2196,6 +2197,15 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
             case PixelFormat::YCBCR_420_888:
             case PixelFormat::IMPLEMENTATION_DEFINED:
             case PixelFormat::YCRCB_420_SP: {
+                if (req->mShareFd <= 0) {
+                    lk.unlock();
+                    Status st = parent->processCaptureRequestError(req);
+                    if (st != Status::OK) {
+                        return onDeviceError("%s: failed to process capture request error!", __FUNCTION__);
+                    }
+                    signalRequestDone();
+                    return true;
+                }
                 int handle_fd = -1, ret;
                 gralloc_module_t const* mGrallocModule;
                 const hw_module_t *allocMod = NULL;
