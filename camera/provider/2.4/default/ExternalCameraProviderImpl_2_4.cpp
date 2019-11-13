@@ -117,11 +117,17 @@ Return<void> ExternalCameraProviderImpl_2_4::getVendorTags(
 
 Return<void> ExternalCameraProviderImpl_2_4::getCameraIdList(
         ICameraProvider::getCameraIdList_cb _hidl_cb) {
-    // External camera HAL always report 0 camera, and extra cameras
-    // are just reported via cameraDeviceStatusChange callbacks
-    hidl_vec<hidl_string> hidlDeviceNameList;
-    _hidl_cb(Status::OK, hidlDeviceNameList);
-    return Void();
+	// External camera HAL always report 0 camera, and extra cameras
+	// are just reported via cameraDeviceStatusChange callbacks
+	std::vector<hidl_string> deviceNameList;
+	for (auto const& deviceNamePair : mCameraStatusMap) {
+		if (mCameraStatusMap[deviceNamePair.first] == CameraDeviceStatus::PRESENT) {
+			deviceNameList.push_back(deviceNamePair.first);
+		}
+	}
+	hidl_vec<hidl_string> hidlDeviceNameList(deviceNameList);
+	_hidl_cb(Status::OK, hidlDeviceNameList);
+	return Void();
 }
 
 Return<void> ExternalCameraProviderImpl_2_4::isSetTorchModeSupported(
