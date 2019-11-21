@@ -853,6 +853,10 @@ Error HWC2On1Adapter::Display::setColorMode(android_color_mode_t mode) {
     if (mode == -1)
         return Error::BadParameter;
 
+    if (mode) {
+        return Error::None;
+    }
+
     if (mode == mActiveColorMode) {
         return Error::None;
     }
