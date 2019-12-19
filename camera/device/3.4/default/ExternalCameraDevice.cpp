@@ -38,8 +38,8 @@ namespace {
 // Other formats to consider in the future:
 // * V4L2_PIX_FMT_YVU420 (== YV12)
 // * V4L2_PIX_FMT_YVYU (YVYU: can be converted to YV12 or other YUV420_888 formats)
-const std::array<uint32_t, /*size*/ 2> kSupportedFourCCs{
-    {V4L2_PIX_FMT_MJPEG, V4L2_PIX_FMT_Z16}};  // double braces required in C++11
+const std::array<uint32_t, /*size*/ 3> kSupportedFourCCs{
+    {V4L2_PIX_FMT_MJPEG, V4L2_PIX_FMT_YUYV, V4L2_PIX_FMT_Z16}};  // double braces required in C++11
 
 constexpr int MAX_RETRY = 5; // Allow retry v4l2 open failures a few times.
 constexpr int OPEN_RETRY_SLEEP_US = 100000; // 100ms * MAX_RETRY = 0.5 seconds
@@ -264,6 +264,7 @@ status_t ExternalCameraDevice::initAvailableCapabilities(
         switch (fmt.fourcc) {
             case V4L2_PIX_FMT_Z16: hasDepth = true; break;
             case V4L2_PIX_FMT_MJPEG: hasColor = true; break;
+			case V4L2_PIX_FMT_YUYV: hasColor = true; break;
             default: ALOGW("%s: Unsupported format found", __FUNCTION__);
         }
     }
@@ -686,13 +687,13 @@ status_t ExternalCameraDevice::initOutputCharsKeys(
 
     bool hasDepth = false;
     bool hasColor = false;
+	bool hasColor_yuv = false;
 
     // For V4L2_PIX_FMT_Z16
     std::array<int, /*size*/ 1> halDepthFormats{{HAL_PIXEL_FORMAT_Y16}};
-    // For V4L2_PIX_FMT_MJPEG
+    // For V4L2_PIX_FMT_MJPEG or V4L2_PIX_FMT_YUYV
     std::array<int, /*size*/ 3> halFormats{{HAL_PIXEL_FORMAT_BLOB, HAL_PIXEL_FORMAT_YCbCr_420_888,
                                             HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED}};
-
     for (const auto& supportedFormat : mSupportedFormats) {
         switch (supportedFormat.fourcc) {
             case V4L2_PIX_FMT_Z16:
@@ -700,6 +701,9 @@ status_t ExternalCameraDevice::initOutputCharsKeys(
                 break;
             case V4L2_PIX_FMT_MJPEG:
                 hasColor = true;
+                break;
+            case V4L2_PIX_FMT_YUYV:
+                hasColor_yuv = true;
                 break;
             default:
                 ALOGW("%s: format %c%c%c%c is not supported!", __FUNCTION__,
@@ -717,6 +721,13 @@ status_t ExternalCameraDevice::initOutputCharsKeys(
     }
     if (hasColor) {
         initOutputCharskeysByFormat(metadata, V4L2_PIX_FMT_MJPEG, halFormats,
+                ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT,
+                ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS,
+                ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS,
+                ANDROID_SCALER_AVAILABLE_STALL_DURATIONS);
+    }
+    if (hasColor_yuv) {
+        initOutputCharskeysByFormat(metadata, V4L2_PIX_FMT_YUYV, halFormats,
                 ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT,
                 ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS,
                 ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS,
@@ -857,6 +868,7 @@ std::vector<SupportedV4L2Format> ExternalCameraDevice::getCandidateSupportedForm
         .index = 0,
         .type = V4L2_BUF_TYPE_VIDEO_CAPTURE};
     int ret = 0;
+
     while (ret == 0) {
         ret = TEMP_FAILURE_RETRY(ioctl(fd, VIDIOC_ENUM_FMT, &fmtdesc));
         ALOGV("index:%d,ret:%d, format:%c%c%c%c", fmtdesc.index, ret,
@@ -865,9 +877,16 @@ std::vector<SupportedV4L2Format> ExternalCameraDevice::getCandidateSupportedForm
                 (fmtdesc.pixelformat >> 16) & 0xFF,
                 (fmtdesc.pixelformat >> 24) & 0xFF);
         if (ret == 0 && !(fmtdesc.flags & V4L2_FMT_FLAG_EMULATED)) {
+            ALOGV("%s(%d) ", __FUNCTION__, __LINE__);
             auto it = std::find (
                     kSupportedFourCCs.begin(), kSupportedFourCCs.end(), fmtdesc.pixelformat);
+            ALOGV("%s(%d) it.format:%c%c%c%c", __FUNCTION__, __LINE__,
+                (*it)& 0xFF,
+                ((*it) >> 8) & 0xFF,
+                ((*it) >> 16) & 0xFF,
+                ((*it) >> 24) & 0xFF);
             if (it != kSupportedFourCCs.end()) {
+                ALOGV("%s(%d) ", __FUNCTION__, __LINE__);
                 // Found supported format
                 v4l2_frmsizeenum frameSize {
                         .index = 0,

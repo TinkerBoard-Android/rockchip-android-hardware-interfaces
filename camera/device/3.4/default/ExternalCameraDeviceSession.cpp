@@ -1794,6 +1794,22 @@ int ExternalCameraDeviceSession::OutputThread::createJpegLocked(
     return 0;
 }
 
+extern "C" void debugShowFPS() {
+    static int mFrameCount = 0;
+    static int mLastFrameCount = 0;
+    static nsecs_t mLastFpsTime = 0;
+    static float mFps = 0;
+    mFrameCount++;
+    if (!(mFrameCount & 0x1F)) {
+        nsecs_t now = systemTime();
+        nsecs_t diff = now - mLastFpsTime;
+        mFps = ((mFrameCount - mLastFrameCount) * float(s2ns(1))) / diff;
+        mLastFpsTime = now;
+        mLastFrameCount = mFrameCount;
+        ALOGI("Camera %d Frames, %2.3f FPS", mFrameCount, mFps);
+    }
+}
+
 bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
     std::shared_ptr<HalRequest> req;
     auto parent = mParent.promote();
@@ -1818,8 +1834,9 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
         signalRequestDone();
         return false;
     };
-
-    if (req->frameIn->mFourcc != V4L2_PIX_FMT_MJPEG && req->frameIn->mFourcc != V4L2_PIX_FMT_Z16) {
+    debugShowFPS();
+    if (req->frameIn->mFourcc != V4L2_PIX_FMT_MJPEG && req->frameIn->mFourcc != V4L2_PIX_FMT_Z16 &&
+        req->frameIn->mFourcc != V4L2_PIX_FMT_YUYV) {
         return onDeviceError("%s: do not support V4L2 format %c%c%c%c", __FUNCTION__,
                 req->frameIn->mFourcc & 0xFF,
                 (req->frameIn->mFourcc >> 8) & 0xFF,
@@ -1845,6 +1862,7 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
 
     // TODO: in some special case maybe we can decode jpg directly to gralloc output?
     if (req->frameIn->mFourcc == V4L2_PIX_FMT_MJPEG) {
+		ALOGV("%s MJPGtoI420", __FUNCTION__);
         ATRACE_BEGIN("MJPGtoI420");
         int res = libyuv::MJPGToI420(
             inData, inDataSize, static_cast<uint8_t*>(mYu12FrameLayout.y), mYu12FrameLayout.yStride,
@@ -1866,6 +1884,29 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
         }
     }
 
+    // TODO: in some special case maybe we can decode jpg directly to gralloc output?
+    if (req->frameIn->mFourcc == V4L2_PIX_FMT_YUYV) {
+		ALOGV("%s YUYVtoI420", __FUNCTION__);
+        ATRACE_BEGIN("YUYVtoI420");
+        int res = libyuv::YUY2ToI420(
+            inData, (mYu12Frame->mWidth)*2, static_cast<uint8_t*>(mYu12FrameLayout.y), mYu12FrameLayout.yStride,
+            static_cast<uint8_t*>(mYu12FrameLayout.cb), mYu12FrameLayout.cStride,
+            static_cast<uint8_t*>(mYu12FrameLayout.cr), mYu12FrameLayout.cStride,
+           mYu12Frame->mWidth, mYu12Frame->mHeight);
+        ATRACE_END();
+
+        if (res != 0) {
+            // For some webcam, the first few V4L2 frames might be malformed...
+            ALOGE("%s: Convert V4L2 frame to YU12 failed! res %d", __FUNCTION__, res);
+            lk.unlock();
+            Status st = parent->processCaptureRequestError(req);
+            if (st != Status::OK) {
+                return onDeviceError("%s: failed to process capture request error!", __FUNCTION__);
+            }
+            signalRequestDone();
+            return true;
+        }
+    }
     ATRACE_BEGIN("Wait for BufferRequest done");
     res = waitForBufferRequestDone(&req->buffers);
     ATRACE_END();
