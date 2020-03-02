@@ -113,6 +113,7 @@ HWC2On1Adapter::HWC2On1Adapter(hwc_composer_device_1_t* hwc1Device)
     getFunction = getFunctionHook;
     populateCapabilities();
     populatePrimary();
+    populateExteneral();
     mHwc1Device->registerProcs(mHwc1Device,
             static_cast<const hwc_procs_t*>(mHwc1Callbacks.get()));
 }
@@ -464,6 +465,11 @@ Error HWC2On1Adapter::registerCallback(Callback descriptor,
         // Hotplug the primary display
         pendingHotplugs.emplace_back(mHwc1DisplayMap[HWC_DISPLAY_PRIMARY],
                 static_cast<int32_t>(Connection::Connected));
+        // Hotplug the external display
+        if(mHwc1DisplayMap.count(HWC_DISPLAY_EXTERNAL) != 0){
+            pendingHotplugs.emplace_back(mHwc1DisplayMap[HWC_DISPLAY_EXTERNAL],
+                static_cast<int32_t>(Connection::Connected));
+        }
 
         for (auto pending : mPendingHotplugs) {
             auto hwc1DisplayId = pending.first;
@@ -1125,12 +1131,15 @@ void HWC2On1Adapter::Display::populateConfigs() {
         ALOGE("populateConfigs: HWC1 ID not set");
         return;
     }
+    DisplayInitSuccess();
 
     const size_t MAX_NUM_CONFIGS = 128;
     uint32_t configs[MAX_NUM_CONFIGS] = {};
     size_t numConfigs = MAX_NUM_CONFIGS;
-    mDevice.mHwc1Device->getDisplayConfigs(mDevice.mHwc1Device, mHwc1Id,
+    auto result = mDevice.mHwc1Device->getDisplayConfigs(mDevice.mHwc1Device, mHwc1Id,
             configs, &numConfigs);
+    if(result != 0)
+      DisplayInitFail();
 
     for (size_t c = 0; c < numConfigs; ++c) {
         uint32_t hwc1ConfigId = configs[c];
@@ -1138,7 +1147,7 @@ void HWC2On1Adapter::Display::populateConfigs() {
 
         int32_t values[NUM_ATTRIBUTES_WITH_COLOR] = {};
         bool hasColor = true;
-        auto result = mDevice.mHwc1Device->getDisplayAttributes(
+        result = mDevice.mHwc1Device->getDisplayAttributes(
                 mDevice.mHwc1Device, mHwc1Id, hwc1ConfigId,
                 ATTRIBUTES_WITH_COLOR, values);
         if (result != 0) {
@@ -2329,6 +2338,18 @@ void HWC2On1Adapter::populatePrimary() {
     display->populateConfigs();
     mDisplays.emplace(display->getId(), std::move(display));
 }
+void HWC2On1Adapter::populateExteneral() {
+    std::unique_lock<std::recursive_timed_mutex> lock(mStateMutex);
+
+    auto display = std::make_shared<Display>(*this, HWC2::DisplayType::Physical);
+    display->setHwc1Id(HWC_DISPLAY_EXTERNAL);
+    display->populateConfigs();
+    ALOGD("rk-debug type = %d, state = %d",HWC_DISPLAY_EXTERNAL,display->DisplayInitState());
+    if(display->DisplayInitState()){
+        mHwc1DisplayMap[HWC_DISPLAY_EXTERNAL] = display->getId();
+        mDisplays.emplace(display->getId(), std::move(display));
+    }
+}
 
 bool HWC2On1Adapter::prepareAllDisplays() {
     ATRACE_CALL();
@@ -2675,7 +2696,7 @@ void HWC2On1Adapter::hwc1Hotplug(int hwc1DisplayId, int connected) {
           F DEBUG   :     #02 pc 00000000000116f4  /vendor/lib64/libhwc2on1adapter.so (android::HWC2On1Adapter::setAllDisplays()+740)
           F DEBUG   :     #03 pc 00000000000112b8  /vendor/lib64/libhwc2on1adapter.so (android::HWC2On1Adapter::Display::present(int*)+72)
         */
-        if (mHwc1Contents[HWC_DISPLAY_EXTERNAL] != nullptr)
+        if (mHwc1Contents.size() != 0 && mHwc1Contents[HWC_DISPLAY_EXTERNAL] != nullptr)
         {
             if(mHwc1Contents[HWC_DISPLAY_EXTERNAL]->retireFenceFd > 0){
                 close(mHwc1Contents[HWC_DISPLAY_EXTERNAL]->retireFenceFd);
