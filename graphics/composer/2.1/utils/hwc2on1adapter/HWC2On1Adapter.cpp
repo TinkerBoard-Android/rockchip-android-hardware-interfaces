@@ -1138,8 +1138,10 @@ void HWC2On1Adapter::Display::populateConfigs() {
     size_t numConfigs = MAX_NUM_CONFIGS;
     auto result = mDevice.mHwc1Device->getDisplayConfigs(mDevice.mHwc1Device, mHwc1Id,
             configs, &numConfigs);
-    if(result != 0)
+    if(result != 0){
       DisplayInitFail();
+      return;
+    }
 
     for (size_t c = 0; c < numConfigs; ++c) {
         uint32_t hwc1ConfigId = configs[c];
