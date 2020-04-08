@@ -9,6 +9,7 @@ LOCAL_REQUIRED_MODULES_arm64 := configstore@1.1.policy
 endif
 LOCAL_VENDOR_MODULE := true
 LOCAL_MODULE_CLASS := EXECUTABLES
+LOCAL_VINTF_FRAGMENTS := android.hardware.configstore@1.1-service.xml
 LOCAL_MODULE_RELATIVE_PATH := hw
 LOCAL_INIT_RC := android.hardware.configstore@1.1-service.rc
 LOCAL_SRC_FILES:= service.cpp
