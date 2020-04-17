@@ -283,9 +283,6 @@ private:
             void resetHasPrepare() { mHasPrepare = false;}
             void markHasSet() { mHasSet = true; }
             void resetHasSet() { mHasSet = false;}
-            bool DisplayInitState() { return mInitSuccess; }
-            void DisplayInitSuccess() { mInitSuccess = true; }
-            void DisplayInitFail() { mInitSuccess = false; }
         private:
             class Config {
                 public:
@@ -468,7 +465,6 @@ private:
             bool mGeometryChanged;
             bool mHasPrepare;
             bool mHasSet;
-            bool mInitSuccess;
     };
 
     // Utility template calling a Display object method directly based on the
@@ -686,7 +682,6 @@ private:
     std::tuple<Layer*, HWC2::Error> getLayer(hwc2_display_t displayId,
             hwc2_layer_t layerId);
     void populatePrimary();
-    void populateExteneral();
 
     bool prepareAllDisplays();
     std::vector<struct hwc_display_contents_1*> mHwc1Contents;
