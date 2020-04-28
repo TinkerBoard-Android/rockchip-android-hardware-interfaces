@@ -44,7 +44,7 @@ namespace {
 // Size of request/result metadata fast message queue. Change to 0 to always use hwbinder buffer.
 static constexpr size_t kMetadataMsgQueueSize = 1 << 18 /* 256kB */;
 
-const int kBadFramesAfterStreamOn = 1; // drop x frames after streamOn to get rid of some initial
+const int kBadFramesAfterStreamOn = 4; // drop x frames after streamOn to get rid of some initial
                                        // bad frames. TODO: develop a better bad frame detection
                                        // method
 constexpr int MAX_RETRY = 15; // Allow retry some ioctl failures a few times to account for some
@@ -2352,6 +2352,12 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
         ALOGE("%s: stop v4l2 streaming failed: ret %d", __FUNCTION__, ret);
         return ret;
     }
+	ALOGI("V4L configuration Stream!, format:%c%c%c%c, w %d, h %d",
+		v4l2Fmt.fourcc & 0xFF,
+		(v4l2Fmt.fourcc >> 8) & 0xFF,
+		(v4l2Fmt.fourcc >> 16) & 0xFF,
+		(v4l2Fmt.fourcc >> 24) & 0xFF,
+		v4l2Fmt.width, v4l2Fmt.height);
 
     // VIDIOC_S_FMT w/h/fmt
     v4l2_format fmt;
@@ -2398,10 +2404,10 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
     if ((bufferSize == 0) || (bufferSize > expectedMaxBufferSize)) {
         ALOGE("%s: V4L2 buffer size: %u looks invalid. Expected maximum size: %u", __FUNCTION__,
                 bufferSize, expectedMaxBufferSize);
-        return -EINVAL;
+        //return -EINVAL;
     }
     mMaxV4L2BufferSize = bufferSize;
-
+    ALOGI("%s: %d", __FUNCTION__, __LINE__);
     const double kDefaultFps = 30.0;
     double fps = 1000.0;
     if (requestFps != 0.0) {
@@ -2422,7 +2428,7 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
             fps = maxFps;
         }
     }
-
+    ALOGI("%s: %d, setfps(%f)", __FUNCTION__, __LINE__, fps);
     int fpsRet = setV4l2FpsLocked(fps);
     if (fpsRet != 0 && fpsRet != -EINVAL) {
         ALOGE("%s: set fps failed: %s", __FUNCTION__, strerror(fpsRet));
@@ -2436,6 +2442,7 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
     req_buffers.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     req_buffers.memory = V4L2_MEMORY_MMAP;
     req_buffers.count = v4lBufferCount;
+    ALOGI("%s: %d) req_buffers.count (%d)", __FUNCTION__, __LINE__, v4lBufferCount);
     if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_REQBUFS, &req_buffers)) < 0) {
         ALOGE("%s: VIDIOC_REQBUFS failed: %s", __FUNCTION__, strerror(errno));
         return -errno;
@@ -2461,7 +2468,7 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
             ALOGE("%s: QUERYBUF %d failed: %s", __FUNCTION__, i,  strerror(errno));
             return -errno;
         }
-
+		ALOGI("%s(%d): buf.m.offset is 0x%08x, buf.length is 0x%08x\n", __FUNCTION__, __LINE__, buffer.m.offset, buffer.length);
         if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_QBUF, &buffer)) < 0) {
             ALOGE("%s: QBUF %d failed: %s", __FUNCTION__, i,  strerror(errno));
             return -errno;
@@ -2497,7 +2504,7 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
             ALOGE("%s: DQBUF fails: %s", __FUNCTION__, strerror(errno));
             return -errno;
         }
-
+		ALOGI("%s: %d)i(%d)", __FUNCTION__, __LINE__, i);
         if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_QBUF, &buffer)) < 0) {
             ALOGE("%s: QBUF index %d fails: %s", __FUNCTION__, buffer.index, strerror(errno));
             return -errno;
@@ -2715,18 +2722,23 @@ Status ExternalCameraDeviceSession::configureStreams(
     }
     // Find the smallest format that matches the desired aspect ratio and is wide/high enough
     SupportedV4L2Format v4l2Fmt {.width = 0, .height = 0};
+    SupportedV4L2Format v4l2Fmt_tmp {.width = 0, .height = 0};
     for (const auto& fmt : mSupportedFormats) {
         uint32_t dim = (mCroppingType == VERTICAL) ? fmt.width : fmt.height;
         if (dim >= maxDim) {
             float aspectRatio = ASPECT_RATIO(fmt);
             if (isAspectRatioClose(aspectRatio, desiredAr)) {
-                v4l2Fmt = fmt;
+                v4l2Fmt_tmp = fmt;
                 // since mSupportedFormats is sorted by width then height, the first matching fmt
                 // will be the smallest one with matching aspect ratio
-                break;
+                if (fmt.fourcc == V4L2_PIX_FMT_MJPEG ) {
+                    v4l2Fmt_tmp = fmt;
+                    break;
+                }
             }
         }
     }
+    v4l2Fmt = v4l2Fmt_tmp;
     if (v4l2Fmt.width == 0) {
         // Cannot find exact good aspect ratio candidate, try to find a close one
         for (const auto& fmt : mSupportedFormats) {
