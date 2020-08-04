@@ -19,7 +19,7 @@
 #include <log/log.h>
 
 #include <inttypes.h>
-#include "ExternalCameraDeviceSession.h"
+#include "ExternalCameraDeviceSession_3.4.h"
 
 #include "android-base/macros.h"
 #include <utils/Timers.h>
