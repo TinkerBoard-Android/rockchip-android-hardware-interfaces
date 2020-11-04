@@ -727,7 +727,7 @@ status_t ExternalCameraDevice::initOutputCharsKeys(
                 ANDROID_SCALER_AVAILABLE_MIN_FRAME_DURATIONS,
                 ANDROID_SCALER_AVAILABLE_STALL_DURATIONS);
     }
-    if (hasColor_yuv) {
+    if (!hasColor && hasColor_yuv) {
         initOutputCharskeysByFormat(metadata, V4L2_PIX_FMT_YUYV, halFormats,
                 ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS_OUTPUT,
                 ANDROID_SCALER_AVAILABLE_STREAM_CONFIGURATIONS,
