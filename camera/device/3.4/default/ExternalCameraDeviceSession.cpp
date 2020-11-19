@@ -2088,14 +2088,8 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
 	*/
     // TODO: in some special case maybe we can decode jpg directly to gralloc output?
     int is16Align = true;
-    bool isBlobOrYv12 = false;
     int tempFrameWidth  = mYu12Frame->mWidth;
     int tempFrameHeight = mYu12Frame->mHeight;
-    for (auto& halBuf : req->buffers) {
-        if(halBuf.format == PixelFormat::BLOB || halBuf.format == PixelFormat::YV12) {
-            isBlobOrYv12 = true;
-        }
-    }
     if (req->frameIn->mFourcc == V4L2_PIX_FMT_MJPEG) {
         if((tempFrameWidth & 0x0f) || (tempFrameHeight & 0x0f)) {
             is16Align = false;
@@ -2104,7 +2098,7 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
         }
     }
 
-    if (isBlobOrYv12 && req->frameIn->mFourcc == V4L2_PIX_FMT_MJPEG) {
+    if (req->frameIn->mFourcc == V4L2_PIX_FMT_MJPEG) {
             LOGD("format is BLOB or YV12,use software jpeg decoder");
         ATRACE_BEGIN("MJPGtoI420");
         int res = libyuv::MJPGToI420(
@@ -2136,7 +2130,7 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
         lk.unlock();
         return onDeviceError("%s: failed to process buffer request error!", __FUNCTION__);
     }
-    if (isBlobOrYv12 && req->frameIn->mFourcc == V4L2_PIX_FMT_YUYV) {
+    if (req->frameIn->mFourcc == V4L2_PIX_FMT_YUYV) {
         YCbCrLayout input;
         input.y = (uint8_t*)req->inData;
         input.yStride = mYu12Frame->mWidth;
