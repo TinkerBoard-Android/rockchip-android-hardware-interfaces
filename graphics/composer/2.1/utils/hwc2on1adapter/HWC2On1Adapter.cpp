@@ -2584,6 +2584,27 @@ void HWC2On1Adapter::hwc1Vsync(int hwc1DisplayId, int64_t timestamp) {
     vsync(callbackInfo.data, displayId, timestamp);
 }
 
+Error HWC2On1Adapter::Display::destroyLayers() {
+    std::unique_lock<std::recursive_mutex> lock(mStateMutex);
+
+    for (auto current = mLayers.begin(); current != mLayers.end(); ++current) {
+        for(auto current2 = mDevice.mLayers.begin(); current2 != mDevice.mLayers.end(); )
+        {
+          if(**current == *(current2->second))
+          {
+            current2=mDevice.mLayers.erase(current2);
+          }
+          else
+            ++current2;
+        }
+    }
+
+    mLayers.clear();
+    markGeometryChanged();
+
+    return Error::None;
+}
+
 void HWC2On1Adapter::hwc1Hotplug(int hwc1DisplayId, int connected) {
     ALOGV("Received hwc1Hotplug(%d, %d)", hwc1DisplayId, connected);
 
@@ -2616,9 +2637,44 @@ void HWC2On1Adapter::hwc1Hotplug(int hwc1DisplayId, int connected) {
             return;
         }
 
-        // Disconnect an existing display
         displayId = mHwc1DisplayMap[hwc1DisplayId];
+        auto& display = mDisplays[displayId];
+        //Remove extern display context if plug out HDMI.
+        //Fix crash when plug out HDMI.
+        /*
+          F DEBUG   : signal 11 (SIGSEGV), code 1 (SEGV_MAPERR), fault addr 0x10
+          ...
+          F DEBUG   :     #00 pc 0000000000068790  /system/lib64/libc.so (pthread_mutex_lock)
+          F DEBUG   :     #01 pc 00000000000b8a7c  /system/lib64/vndk-sp/libc++.so (std::__1::recursive_mutex::lock()+8)
+          F DEBUG   :     #02 pc 00000000000116f4  /vendor/lib64/libhwc2on1adapter.so (android::HWC2On1Adapter::setAllDisplays()+740)
+          F DEBUG   :     #03 pc 00000000000112b8  /vendor/lib64/libhwc2on1adapter.so (android::HWC2On1Adapter::Display::present(int*)+72)
+        */
+        if (mHwc1Contents[HWC_DISPLAY_EXTERNAL] != nullptr)
+        {
+            if(mHwc1Contents[HWC_DISPLAY_EXTERNAL]->retireFenceFd > 0){
+                close(mHwc1Contents[HWC_DISPLAY_EXTERNAL]->retireFenceFd);
+                mHwc1Contents[HWC_DISPLAY_EXTERNAL]->retireFenceFd = -1;
+            }
+            if(mHwc1Contents[HWC_DISPLAY_EXTERNAL]->outbufAcquireFenceFd > 0){
+                close(mHwc1Contents[HWC_DISPLAY_EXTERNAL]->outbufAcquireFenceFd);
+                mHwc1Contents[HWC_DISPLAY_EXTERNAL]->outbufAcquireFenceFd = -1;
+            }
+            for(size_t layerId=0 ; layerId < mHwc1Contents[HWC_DISPLAY_EXTERNAL]->numHwLayers ; layerId++)  {
+                hwc_layer_1_t& layer = mHwc1Contents[HWC_DISPLAY_EXTERNAL]->hwLayers[layerId];
+                if(layer.releaseFenceFd > 0){
+                    close(layer.releaseFenceFd);
+                    layer.releaseFenceFd = -1;
+                }
+                if(layer.acquireFenceFd > 0){
+                    close(layer.acquireFenceFd);
+                    layer.acquireFenceFd = -1;
+                }
+            }
+            mHwc1Contents.erase(mHwc1Contents.begin()+HWC_DISPLAY_EXTERNAL);
+        }
+        // Disconnect an existing display
         mHwc1DisplayMap.erase(HWC_DISPLAY_EXTERNAL);
+        display->destroyLayers();
         mDisplays.erase(displayId);
     }
 
