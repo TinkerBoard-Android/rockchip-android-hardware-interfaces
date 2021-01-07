@@ -15,7 +15,6 @@
  */
 
 #include <android-base/logging.h>
-#include <cutils/properties.h>
 #include <hidl/HidlLazyUtils.h>
 #include <hidl/HidlTransportSupport.h>
 #include <utils/Looper.h>
@@ -49,9 +48,7 @@ int main(int /*argc*/, char** argv) {
         argv, android::base::LogdLogger(android::base::SYSTEM));
     LOG(INFO) << "Wifi Hal is booting up...";
 
-    bool config = property_get_bool("ro.wifi.sleep.power.down", false);
-    if (!config)
-	wifi_load_driver();
+    wifi_load_driver();
     configureRpcThreadpool(1, true /* callerWillJoin */);
 
     const auto iface_tool =
