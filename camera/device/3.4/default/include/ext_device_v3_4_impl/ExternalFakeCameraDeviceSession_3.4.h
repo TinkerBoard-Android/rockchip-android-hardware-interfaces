@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ANDROID_HARDWARE_CAMERA_DEVICE_V3_4_EXTCAMERADEVICESESSION_H
-#define ANDROID_HARDWARE_CAMERA_DEVICE_V3_4_EXTCAMERADEVICESESSION_H
+#ifndef ANDROID_HARDWARE_CAMERA_DEVICE_V3_4_EXTFAKECAMERADEVICESESSION_H
+#define ANDROID_HARDWARE_CAMERA_DEVICE_V3_4_EXTFAKECAMERADEVICESESSION_H
 
 #include <android/hardware/camera/device/3.2/ICameraDevice.h>
 #include <android/hardware/camera/device/3.4/ICameraDeviceSession.h>
@@ -37,7 +37,6 @@
 #include "android-base/unique_fd.h"
 #include "ExternalCameraUtils_3.4.h"
 #include "MpiJpegDecoder.h"
-#include "rkvpu_dec_api.h"
 #include <utils/Singleton.h>
 #include "ExternalCameraMemManager.h"
 #include <linux/videodev2.h>
@@ -89,17 +88,17 @@ using ::android::sp;
 using ::android::Mutex;
 using ::android::base::unique_fd;
 
-struct ExternalCameraDeviceSession : public virtual RefBase,
+struct ExternalFakeCameraDeviceSession : public virtual RefBase,
         public virtual OutputThreadInterface {
 
-    ExternalCameraDeviceSession(const sp<ICameraDeviceCallback>&,
+    ExternalFakeCameraDeviceSession(const sp<ICameraDeviceCallback>&,
             const ExternalCameraConfig& cfg,
             const std::vector<SupportedV4L2Format>& sortedFormats,
             const CroppingType& croppingType,
             const common::V1_0::helper::CameraMetadata& chars,
             const std::string& cameraId,
             unique_fd v4l2Fd);
-    virtual ~ExternalCameraDeviceSession();
+    virtual ~ExternalFakeCameraDeviceSession();
     // Call by CameraDevice to dump active device states
     void dumpState(const native_handle_t*);
     // Caller must use this method to check if CameraDeviceSession ctor failed
@@ -199,9 +198,6 @@ struct ExternalCameraDeviceSession : public virtual RefBase,
         ~FormatConvertThread();
         void createJpegDecoder();
         void destroyJpegDecoder();
-		void createH264Decoder(int w, int h);
-		int h264Decoder(unsigned long dst_fd, uint8_t* inData, size_t inDataSize);
-		void destroyH264Decoder();
         Status submitRequest(const std::shared_ptr<HalRequest>&);
         virtual bool threadLoop() override;
 
@@ -216,8 +212,6 @@ struct ExternalCameraDeviceSession : public virtual RefBase,
 
         MpiJpegDecoder mHWJpegDecoder;
         MpiJpegDecoder::OutputFrame_t mHWDecoderFrameOut;
-
-		RKHWDecApi mRkHwDecApi;
         sp<OutputThread> mFmtOutputThread;
         mutable std::mutex mRequestListLock;      // Protect acccess to mRequestList,
                                                   // mProcessingRequest and mProcessingFrameNumer
@@ -310,8 +304,8 @@ protected:
             const ExternalCameraConfig& devCfg);
 
     // TODO: change to unique_ptr for better tracking
-    sp<V4L2Frame> dequeueV4l2FrameLocked(/*out*/nsecs_t* shutterTs); // Called with mLock hold
-    void enqueueV4l2Frame(const sp<V4L2Frame>&);
+    sp<YuvFrame> dequeueV4l2FrameLocked(/*out*/nsecs_t* shutterTs); // Called with mLock hold
+    void enqueueV4l2Frame(const sp<YuvFrame>&);
 
     // Check if input Stream is one of supported stream setting on this device
     static bool isSupported(const Stream& stream,
@@ -377,8 +371,6 @@ protected:
     bool mFirstRequest = false;
     common::V1_0::helper::CameraMetadata mLatestReqSetting;
 
-	bool isNeedCheckIFrame = true;
-
     bool mV4l2Streaming = false;
     SupportedV4L2Format mV4l2StreamingFmt;
     double mV4l2StreamingFps = 0.0;
@@ -435,7 +427,7 @@ protected:
 private:
 
     struct TrampolineSessionInterface_3_4 : public ICameraDeviceSession {
-        TrampolineSessionInterface_3_4(sp<ExternalCameraDeviceSession> parent) :
+        TrampolineSessionInterface_3_4(sp<ExternalFakeCameraDeviceSession> parent) :
                 mParent(parent) {}
 
         virtual Return<void> constructDefaultRequestSettings(
@@ -493,7 +485,7 @@ private:
         }
 
     private:
-        sp<ExternalCameraDeviceSession> mParent;
+        sp<ExternalFakeCameraDeviceSession> mParent;
     };
 };
 
