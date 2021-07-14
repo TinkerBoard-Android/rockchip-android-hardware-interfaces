@@ -19,7 +19,11 @@
 
 #include <dlfcn.h>
 #include "utils/LightRefBase.h"
+#ifndef RK_GRALLOC_4
+#include "ExternalCameraGralloc.h"
+#else
 #include "ExternalCameraGralloc4.h"
+#endif
 
 namespace android {
 

@@ -33,7 +33,11 @@
 
 #include <jpeglib.h>
 #include "RgaCropScale.h"
+#ifndef RK_GRALLOC_4
+#include "ExternalCameraGralloc.h"
+#else
 #include "ExternalCameraGralloc4.h"
+#endif
 #define NV12_HW_CONVERT
 #define PLANES_NUM 1
 
@@ -2370,8 +2374,21 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
                 } else if (req->frameIn->mFourcc == V4L2_PIX_FMT_NV12){
 
                     int handle_fd = -1, ret;
+#ifndef RK_GRALLOC_4
+                    gralloc_module_t const* mGrallocModule;
+                    const hw_module_t *allocMod = NULL;
+                    const native_handle_t* tmp_hand = (const native_handle_t*)*(halBuf.bufPtr);
+                    ret= hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &allocMod);
+                    mGrallocModule = reinterpret_cast<gralloc_module_t const *>(allocMod);
+                    mGrallocModule->perform(
+                            mGrallocModule,
+                            GRALLOC_MODULE_PERFORM_GET_HADNLE_PRIME_FD,
+                            tmp_hand,
+                            &handle_fd);
+#else
                     const native_handle_t* tmp_hand = (const native_handle_t*)(*(halBuf.bufPtr));
                     ret = ExCamGralloc4::get_share_fd(tmp_hand, &handle_fd);
+#endif
                     if (handle_fd == -1) {
                         LOGE("convert tmp_hand to dst_fd error");
                         return -EINVAL;
@@ -2388,8 +2405,21 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
                 } else if (req->frameIn->mFourcc == V4L2_PIX_FMT_H264){
 
                     int handle_fd = -1, ret;
+#ifndef RK_GRALLOC_4
+                    gralloc_module_t const* mGrallocModule;
+                    const hw_module_t *allocMod = NULL;
+                    const native_handle_t* tmp_hand = (const native_handle_t*)*(halBuf.bufPtr);
+                    ret= hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &allocMod);
+                    mGrallocModule = reinterpret_cast<gralloc_module_t const *>(allocMod);
+                    mGrallocModule->perform(
+                            mGrallocModule,
+                            GRALLOC_MODULE_PERFORM_GET_HADNLE_PRIME_FD,
+                            tmp_hand,
+                            &handle_fd);
+#else
                     const native_handle_t* tmp_hand = (const native_handle_t*)(*(halBuf.bufPtr));
                     ret = ExCamGralloc4::get_share_fd(tmp_hand, &handle_fd);
+#endif
                     if (handle_fd == -1) {
                         LOGE("convert tmp_hand to dst_fd error");
                         return -EINVAL;
@@ -2464,8 +2494,21 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
 #endif
 
                     int handle_fd = -1, ret;
+#ifndef RK_GRALLOC_4
+                    gralloc_module_t const* mGrallocModule;
+                    const hw_module_t *allocMod = NULL;
+                    const native_handle_t* tmp_hand = (const native_handle_t*)*(halBuf.bufPtr);
+                    ret= hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &allocMod);
+                    mGrallocModule = reinterpret_cast<gralloc_module_t const *>(allocMod);
+                    mGrallocModule->perform(
+                            mGrallocModule,
+                            GRALLOC_MODULE_PERFORM_GET_HADNLE_PRIME_FD,
+                            tmp_hand,
+                            &handle_fd);
+#else
                     const native_handle_t* tmp_hand = (const native_handle_t*)(*(halBuf.bufPtr));
                     ret = ExCamGralloc4::get_share_fd(tmp_hand, &handle_fd);
+#endif
                     if (handle_fd == -1) {
                         LOGE("convert tmp_hand to dst_fd error");
                         return -EINVAL;
