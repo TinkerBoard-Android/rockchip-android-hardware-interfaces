@@ -86,7 +86,6 @@ cc_library_shared {
         "ExternalCameraUtils.cpp",
         "RgaCropScale.cpp",
         "ExternalCameraMemManager.cpp",
-        "ExternalCameraGralloc4.cpp",
         "rkvpu_dec_api.cpp",
         "osd.cpp",
         "subvideo.cpp"
@@ -164,10 +163,25 @@ cc_library_shared {
         "-Wno-error",
         "-Wno-unused",
         "-DRK_HW_JPEG_DECODER",
-        "-DRK_GRALLOC_4",
     ],
 
     product_variables: {
+        cameraWithGralloc4: {
+            cppflags:[
+                "-DRK_GRALLOC_4",
+            ],
+            cflags:[
+                "-DRK_GRALLOC_4",
+            ],
+            srcs:[
+                "ExternalCameraGralloc4.cpp",
+            ],
+        },
+        cameraWithOutGralloc4: {
+            srcs:[
+                "ExternalCameraGralloc.cpp",
+            ],
+        },
         cameraSupportHDMI: {
             cppflags:[
             "-DHDMI_ENABLE",

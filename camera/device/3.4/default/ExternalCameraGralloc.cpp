@@ -24,6 +24,7 @@
 #include <ui/GraphicBuffer.h>
 #include <linux/videodev2.h>
 #include "ExternalCameraGralloc.h"
+#include "hardware/gralloc_rockchip.h"
 
 using namespace android;
 

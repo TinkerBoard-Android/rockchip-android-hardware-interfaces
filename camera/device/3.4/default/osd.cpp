@@ -36,7 +36,11 @@
 #include <ui/GraphicBuffer.h>
 #include <ui/GraphicBufferAllocator.h>
 #include <ui/GraphicBufferMapper.h>
+#ifndef RK_GRALLOC_4
+#include "ExternalCameraGralloc.h"
+#else
 #include "ExternalCameraGralloc4.h"
+#endif
 
 #include <sys/stat.h>
 #include <fcntl.h>

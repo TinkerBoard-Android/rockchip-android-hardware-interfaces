@@ -192,8 +192,12 @@ int GrallocDrmMemManager::createGrallocDrmBuffer(struct bufferinfo_s* grallocbuf
     }
 
     for(i = 0;i < numBufs; i++) {
+#ifndef RK_GRALLOC_4
+        *tmpalloc = mOps->alloc(mHandle,grallocbuf->mPerBuffersize);
+#else
         *tmpalloc = mOps->alloc(mHandle,grallocbuf->mPerBuffersize,
                             grallocbuf->width, grallocbuf->height);
+#endif
         if (*tmpalloc) {
             LOGD("alloc success");
         } else {
@@ -338,7 +342,11 @@ int GrallocDrmMemManager::flushCacheMem(buffer_type_enum buftype)
 
     for(unsigned int i = 0;(tmp_buf && (i < tmp_buf->mNumBffers));i++) {
         if(*tmpalloc && (*tmpalloc)->vir_addr) {
+#ifndef RK_GRALLOC_4
+            int ret = mOps->flush_cache(mHandle, *tmpalloc);
+#else
             int ret = mOps->flush_cache(mHandle, *tmpalloc, (*tmpalloc)->width, (*tmpalloc)->height);
+#endif
             if(ret != 0)
                 LOGD("flush cache failed !");
         }
