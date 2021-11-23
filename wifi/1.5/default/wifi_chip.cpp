@@ -130,16 +130,16 @@ std::vector<std::string> getPredefinedApIfaceNames(bool is_bridged) {
 
 std::string getPredefinedP2pIfaceName() {
     std::array<char, PROPERTY_VALUE_MAX> buffer;
-	    if (wifi_type[0] == 0) {
-	    check_wifi_chip_type_string(wifi_type);
+    if (wifi_type[0] == 0) {
+        check_wifi_chip_type_string(wifi_type);
     }
     if ((0 == strncmp(wifi_type, "AP", 2)) || (0 == strncmp(wifi_type, "SPRDWL", 6))) {
-		property_set("vendor.wifi.direct.interface", "p2p-dev-wlan0");
-		property_get("wifi.direct.interface", buffer.data(), "p2p-dev-wlan0");
+        property_set("vendor.wifi.direct.interface", "p2p-dev-wlan0");
+        property_get("wifi.direct.interface", buffer.data(), "p2p-dev-wlan0");
     } else {
-		property_set("vendor.wifi.direct.interface", "p2p0");
-		property_get("wifi.direct.interface", buffer.data(), "p2p0");
-	}
+        property_set("vendor.wifi.direct.interface", "p2p0");
+        property_get("wifi.direct.interface", buffer.data(), "p2p0");
+    }
     return buffer.data();
 }
 
@@ -1177,6 +1177,14 @@ std::pair<WifiStatus, sp<IWifiP2pIface>> WifiChip::createP2pIfaceInternal() {
 
 std::pair<WifiStatus, std::vector<hidl_string>>
 WifiChip::getP2pIfaceNamesInternal() {
+    if (wifi_type[0] == 0) {
+        check_wifi_chip_type_string(wifi_type);
+    }
+    if ((0 == strncmp(wifi_type, "AP", 2)) || (0 == strncmp(wifi_type, "SPRDWL", 6))) {
+        property_set("vendor.wifi.direct.interface", "p2p-dev-wlan0");
+    } else {
+        property_set("vendor.wifi.direct.interface", "p2p0");
+    }
     if (p2p_ifaces_.empty()) {
         return {createWifiStatus(WifiStatusCode::SUCCESS), {}};
     }
