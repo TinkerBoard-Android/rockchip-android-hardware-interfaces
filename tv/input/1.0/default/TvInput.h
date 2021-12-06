@@ -35,19 +35,28 @@ using ::android::hardware::tv::input::V1_0::ITvInputCallback;
 using ::android::hardware::tv::input::V1_0::Result;
 using ::android::hardware::tv::input::V1_0::TvInputEvent;
 using ::android::hardware::tv::input::V1_0::TvStreamConfig;
+using ::android::hardware::tv::input::V1_0::PreviewRequest;
 using ::android::hardware::Return;
 using ::android::hardware::Void;
 using ::android::hardware::hidl_vec;
 using ::android::hardware::hidl_string;
 using ::android::sp;
+using android::hardware::hidl_handle;
 
 struct TvInput : public ITvInput {
     TvInput(tv_input_device_t* device);
     ~TvInput();
+
+    Return<Result> requestCapture(int32_t deviceId, int32_t streamId, uint64_t buffId, const hidl_handle& buffer, int32_t seq)  override;
+    Return<void> cancelCapture(int32_t deviceId, int32_t streamId, int32_t seq)  override;
+
+    Return<void> setPreviewInfo(int32_t deviceId, int32_t streamId, int32_t top, int32_t left, int32_t width, int32_t height)  override;
+    Return<void> setSinglePreviewBuffer(const PreviewBuffer& buff)  override;
+
     Return<void> setCallback(const sp<ITvInputCallback>& callback)  override;
     Return<void> getStreamConfigurations(int32_t deviceId,
             getStreamConfigurations_cb _hidl_cb)  override;
-    Return<void> openStream(int32_t deviceId, int32_t streamId,
+    Return<void> openStream(int32_t deviceId, int32_t streamId, int32_t streamType,
             openStream_cb _hidl_cb)  override;
     Return<Result> closeStream(int32_t deviceId, int32_t streamId)  override;
 
