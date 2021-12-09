@@ -50,7 +50,7 @@ struct TvInput : public ITvInput {
     Return<Result> requestCapture(int32_t deviceId, int32_t streamId, uint64_t buffId, const hidl_handle& buffer, int32_t seq)  override;
     Return<void> cancelCapture(int32_t deviceId, int32_t streamId, int32_t seq)  override;
 
-    Return<void> setPreviewInfo(int32_t deviceId, int32_t streamId, int32_t top, int32_t left, int32_t width, int32_t height)  override;
+    Return<void> setPreviewInfo(int32_t deviceId, int32_t streamId, int32_t top, int32_t left, int32_t width, int32_t height, int32_t extInfo)  override;
     Return<void> setSinglePreviewBuffer(const PreviewBuffer& buff)  override;
 
     Return<void> setCallback(const sp<ITvInputCallback>& callback)  override;
