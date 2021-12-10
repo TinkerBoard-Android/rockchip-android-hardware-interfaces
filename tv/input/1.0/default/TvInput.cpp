@@ -90,9 +90,18 @@ Return<void> TvInput::cancelCapture(int32_t deviceId, int32_t streamId, int32_t 
     return Void();
 }
 
-Return<void> TvInput::setPreviewInfo(int32_t deviceId, int32_t streamId, int32_t top, int32_t left, int32_t width, int32_t height, int32_t extInfo) {
+Return<Result> TvInput::setPreviewInfo(int32_t deviceId, int32_t streamId, int32_t top, int32_t left, int32_t width, int32_t height, int32_t extInfo) {
     mDevice->set_preview_info(deviceId, streamId, top, left, width, height, extInfo);
-    return Void();
+    int ret = mDevice->set_preview_info(deviceId, streamId, top, left, width, height,extInfo);
+    Result res = Result::UNKNOWN;
+    if (ret == 0) {
+        res = Result::OK;
+    } else if (ret == -ENOENT) {
+        res = Result::INVALID_STATE;
+    } else if (ret == -EINVAL) {
+        res = Result::INVALID_ARGUMENTS;
+    }
+    return res;
 }
 
 Return<void> TvInput::setSinglePreviewBuffer(const PreviewBuffer& buff) {
