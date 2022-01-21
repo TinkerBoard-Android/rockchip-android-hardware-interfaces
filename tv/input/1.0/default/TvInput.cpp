@@ -126,9 +126,9 @@ Return<void> TvInput::getStreamConfigurations(int32_t deviceId, getStreamConfigu
     hidl_vec<TvStreamConfig> tvStreamConfigs;
     if (ret == 0) {
         res = Result::OK;
-        tvStreamConfigs.resize(getSupportedConfigCount(configCount, configs));
+        tvStreamConfigs.resize(configCount);
         int32_t pos = 0;
-        for (int32_t i = 0; i < configCount; ++i) {
+        for (int32_t i = 0; i < configCount; i++) {
             tvStreamConfigs[pos].streamId = configs[i].stream_id;
             tvStreamConfigs[pos].maxVideoWidth = configs[i].max_video_width;
             tvStreamConfigs[pos].maxVideoHeight = configs[i].max_video_height;
@@ -139,7 +139,7 @@ Return<void> TvInput::getStreamConfigurations(int32_t deviceId, getStreamConfigu
                 tvStreamConfigs[pos].height = configs[i].height;
                 tvStreamConfigs[pos].buffCount = configs[i].buffCount;
             }
-            ++pos;
+            pos++;
         }
     } else if (ret == -EINVAL) {
         res = Result::INVALID_ARGUMENTS;
