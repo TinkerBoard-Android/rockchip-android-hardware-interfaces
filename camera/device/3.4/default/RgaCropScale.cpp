@@ -17,6 +17,7 @@
 #include "RgaCropScale.h"
 #include <utils/Singleton.h>
 #include <RockchipRga.h>
+#include <im2d_api/im2d.h>
 
 namespace android {
 namespace camera2 {
@@ -40,7 +41,8 @@ namespace camera2 {
 int RgaCropScale::CropScaleNV12Or21(struct Params* in, struct Params* out)
 {
     rga_info_t src, dst;
-
+    rga_buffer_handle_t src_handle;
+    rga_buffer_handle_t dst_handle;
     memset(&src, 0, sizeof(rga_info_t));
     memset(&dst, 0, sizeof(rga_info_t));
 
@@ -64,20 +66,37 @@ int RgaCropScale::CropScaleNV12Or21(struct Params* in, struct Params* out)
         return -1;
     }
     RockchipRga& rkRga(RockchipRga::get());
+    im_handle_param_t param;
+    param.width = in->width;
+    param.height = in->height;
+    param.format = in->fmt;
+
 
     if (in->fd == -1) {
         src.fd = -1;
         src.virAddr = (void*)in->vir_addr;
+        src_handle = importbuffer_virtualaddr(src.virAddr, &param);
+        ALOGD("@%s，src virtual:%p,width:%d,height:%d",__FUNCTION__,src.virAddr,param.width,param.height);
     } else {
         src.fd = in->fd;
+        src_handle = importbuffer_fd(src.fd, &param);
+        ALOGD("@%s， src fd:%d,width:%d,height:%d",__FUNCTION__,src.fd,param.width,param.height);
     }
     src.mmuFlag = ((2 & 0x3) << 4) | 1 | (1 << 8) | (1 << 10);
+
+    param.width = out->width;
+    param.height = out->height;
+    param.format = out->fmt;
 
     if (out->fd == -1 ) {
         dst.fd = -1;
         dst.virAddr = (void*)out->vir_addr;
+        dst_handle = importbuffer_virtualaddr(dst.virAddr, &param);
+        ALOGD("@%s，dst virtual:%p,width:%d,height:%d",__FUNCTION__,dst.virAddr,param.width,param.height);
     } else {
         dst.fd = out->fd;
+        dst_handle = importbuffer_fd(dst.fd, &param);
+        ALOGD("@%s， dst fd:%d,width:%d,height:%d",__FUNCTION__,dst.fd,param.width,param.height);
     }
     dst.mmuFlag = ((2 & 0x3) << 4) | 1 | (1 << 8) | (1 << 10);
 
@@ -101,11 +120,17 @@ int RgaCropScale::CropScaleNV12Or21(struct Params* in, struct Params* out)
     if (in->mirror)
         src.rotation = DRM_RGA_TRANSFORM_FLIP_H;
 
+    src.handle = src_handle;
+    src.fd = 0;
+    dst.handle = dst_handle;
+    dst.fd = 0;
+
     if (rkRga.RkRgaBlit(&src, &dst, NULL)) {
         ALOGE("%s:rga blit failed", __FUNCTION__);
         return -1;
     }
-
+    releasebuffer_handle(src_handle);
+    releasebuffer_handle(dst_handle);
     return 0;
 }
 
@@ -121,19 +146,40 @@ int RgaCropScale::rga_nv12_scale_crop(
     int zoom_cropW,zoom_cropH;
     int ratio = 0;
     int zoom_top_offset=0,zoom_left_offset=0;
+    rga_buffer_handle_t src_handle;
+    rga_buffer_handle_t dst_handle;
 
     RockchipRga& rkRga(RockchipRga::get());
+
+    im_handle_param_t param;
+    param.width = src_width;
+    param.height = src_height;
+    param.format = HAL_PIXEL_FORMAT_YCrCb_NV12;
 
     memset(&src, 0, sizeof(rga_info_t));
     if (isYuyvFormat) {
         src.fd = -1;
         src.virAddr = (void*)src_fd;
+        src_handle = importbuffer_virtualaddr(src.virAddr, &param);
+        ALOGD("@%s，src virtual:%p,width:%d,height:%d",__FUNCTION__,src.virAddr,param.width,param.height);
     } else {
         src.fd = src_fd;
+        src_handle = importbuffer_fd(src.fd, &param);
+        ALOGD("@%s，src fd:%d,width:%d,height:%d",__FUNCTION__,src.fd,param.width,param.height);
     }
     src.mmuFlag = ((2 & 0x3) << 4) | 1 | (1 << 8) | (1 << 10);
     memset(&dst, 0, sizeof(rga_info_t));
     dst.fd = dst_fd;
+    param.width = dst_width;
+    param.height = dst_height;
+    if (isDstNV21){
+        param.format = HAL_PIXEL_FORMAT_YCrCb_420_SP;
+    }else{
+        param.format = HAL_PIXEL_FORMAT_YCrCb_NV12;
+    }
+
+    dst_handle = importbuffer_fd(dst.fd, &param);
+    ALOGD("@%s， dst fd:%d,width:%d,height:%d",__FUNCTION__,dst.fd,param.width,param.height);
     dst.mmuFlag = ((2 & 0x3) << 4) | 1 | (1 << 8) | (1 << 10);
 
     if((dst_width > RGA_VIRTUAL_W) || (dst_height > RGA_VIRTUAL_H)){
@@ -185,6 +231,11 @@ int RgaCropScale::rga_nv12_scale_crop(
     if (mirror)
         src.rotation = DRM_RGA_TRANSFORM_FLIP_H;
     //TODO:sina,cosa,scale_mode,render_mode
+
+    src.handle = src_handle;
+    src.fd = 0;
+    dst.handle = dst_handle;
+    dst.fd = 0;
     ret = rkRga.RkRgaBlit(&src, &dst, NULL);
     if (ret) {
         ALOGE("%s:rga blit failed", __FUNCTION__);
@@ -192,6 +243,8 @@ int RgaCropScale::rga_nv12_scale_crop(
     }
 
     END:
+    releasebuffer_handle(src_handle);
+    releasebuffer_handle(dst_handle);
     return ret;
 }
 
