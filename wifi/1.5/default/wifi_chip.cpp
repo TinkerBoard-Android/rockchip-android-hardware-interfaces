@@ -136,6 +136,7 @@ std::string getPredefinedP2pIfaceName() {
     std::string p2pDevIfName = "";
     std::array<char, PROPERTY_VALUE_MAX> buffer;
 
+    // @Rockchip fix
     if (wifi_type[0] == 0) {
         check_wifi_chip_type_string(wifi_type);
     }
@@ -146,6 +147,7 @@ std::string getPredefinedP2pIfaceName() {
         property_set("vendor.wifi.direct.interface", "p2p0");
         property_get("wifi.direct.interface", buffer.data(), "p2p0");
     }
+    // @end
 
     if (strncmp(buffer.data(), P2P_MGMT_DEVICE_PREFIX,
                 strlen(P2P_MGMT_DEVICE_PREFIX)) == 0) {
