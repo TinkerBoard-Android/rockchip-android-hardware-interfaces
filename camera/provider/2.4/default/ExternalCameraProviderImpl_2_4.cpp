@@ -29,6 +29,10 @@
 #include "ExternalCameraDevice_3_6.h"
 #include "ExternalFakeCameraDevice_3_4.h"
 
+#ifdef HDMI_ENABLE
+#include <rockchip/hardware/hdmi/1.0/IHdmi.h>
+#endif
+
 #define FAKE_CAMERA_ENABLE 0
 
 namespace android {
@@ -49,6 +53,8 @@ constexpr char kPrefix[] = "video";
 constexpr int kPrefixLen = sizeof(kPrefix) - 1;
 constexpr int kDevicePrefixLen = sizeof(kDevicePath) + kPrefixLen + 1;
 
+char kV4l2DevicePath[kMaxDevicePathLen];
+
 bool matchDeviceName(int cameraIdOffset,
                      const hidl_string& deviceName, std::string* deviceVersion,
                      std::string* cameraDevicePath) {
@@ -67,12 +73,17 @@ bool matchDeviceName(int cameraIdOffset,
 }
 
 } // anonymous namespace
-
+sp<V4L2DeviceEvent> ExternalCameraProviderImpl_2_4::mV4l2Event;
+ExternalCameraProviderImpl_2_4* ExternalCameraProviderImpl_2_4::sInstance;
 ExternalCameraProviderImpl_2_4::ExternalCameraProviderImpl_2_4() :
         mCfg(ExternalCameraConfig::loadFromCfg()),
         mHotPlugThread(this) {
     mHotPlugThread.run("ExtCamHotPlug", PRIORITY_BACKGROUND);
-
+#ifdef HDMI_ENABLE
+    ExternalCameraProviderImpl_2_4::mV4l2Event = new V4L2DeviceEvent();
+    ExternalCameraProviderImpl_2_4::sInstance= this;
+    mV4l2Event->RegisterEventvCallBack((V4L2EventCallBack)ExternalCameraProviderImpl_2_4::hinDevEventCallback);
+#endif
     mPreferredHal3MinorVersion =
         property_get_int32("ro.vendor.camera.external.hal3TrebleMinorVersion", 4);
     ALOGV("Preferred HAL 3 minor version is %d", mPreferredHal3MinorVersion);
@@ -92,8 +103,18 @@ ExternalCameraProviderImpl_2_4::ExternalCameraProviderImpl_2_4() :
 
 ExternalCameraProviderImpl_2_4::~ExternalCameraProviderImpl_2_4() {
     mHotPlugThread.requestExit();
-}
+    if (ExternalCameraProviderImpl_2_4::mV4l2Event)
+        ExternalCameraProviderImpl_2_4::mV4l2Event->closePipe();
+    if (ExternalCameraProviderImpl_2_4::mV4l2Event)
+        ExternalCameraProviderImpl_2_4::mV4l2Event->closeEventThread();
 
+}
+V4L2EventCallBack ExternalCameraProviderImpl_2_4::hinDevEventCallback(int event_type){
+    ALOGD("@%s,event_type:%d",__FUNCTION__,event_type);
+    ExternalCameraProviderImpl_2_4::sInstance->deviceRemoved(kV4l2DevicePath);
+    ExternalCameraProviderImpl_2_4::sInstance->deviceAdded(kV4l2DevicePath);
+    return 0;
+}
 
 Return<Status> ExternalCameraProviderImpl_2_4::setCallback(
         const sp<ICameraProviderCallback>& callback) {
@@ -328,10 +349,107 @@ ExternalCameraProviderImpl_2_4::HotplugThread::HotplugThread(
         mParent(parent),
         mInternalDevices(parent->mCfg.mInternalDevices) {}
 
-ExternalCameraProviderImpl_2_4::HotplugThread::~HotplugThread() {}
+ExternalCameraProviderImpl_2_4::HotplugThread::~HotplugThread() {
+    if (ExternalCameraProviderImpl_2_4::mV4l2Event)
+        ExternalCameraProviderImpl_2_4::mV4l2Event->closeEventThread();
+}
 
+
+
+
+int ExternalCameraProviderImpl_2_4::HotplugThread::findDevice(int id, int& initWidth, int& initHeight,int& initFormat ) {
+    const int kMaxDevicePathLen = 256;
+const char* kDevicePath = "/dev/";
+const char kPrefix[] = "video";
+const int kPrefixLen = sizeof(kPrefix) - 1;
+//constexpr int kDevicePrefixLen = sizeof(kDevicePath) + kPrefixLen + 1;
+const char kHdmiNodeName[] = "rk_hdmirx";
+int mHinDevHandle = 0;
+int mFrameWidth,mFrameHeight,mBufferSize;
+
+static v4l2_buf_type TVHAL_V4L2_BUF_TYPE = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+    ALOGD("%s called", __func__);
+    // Find existing /dev/video* devices
+    DIR* devdir = opendir(kDevicePath);
+    int videofd,ret;
+    if(devdir == 0) {
+        ALOGE("%s: cannot open %s! Exiting threadloop", __FUNCTION__, kDevicePath);
+        return -1;
+    }
+    struct dirent* de;
+    while ((de = readdir(devdir)) != 0) {
+        // Find external v4l devices that's existing before we start watching and add them
+        if (!strncmp(kPrefix, de->d_name, kPrefixLen)) {
+		std::string deviceId(de->d_name + kPrefixLen);
+		ALOGD(" v4l device %s found", de->d_name);
+		char v4l2DeviceDriver[16];
+		snprintf(kV4l2DevicePath, kMaxDevicePathLen,"%s%s", kDevicePath, de->d_name);
+		videofd = open(kV4l2DevicePath, O_RDWR);
+		if (videofd < 0){
+			ALOGE("[%s %d] mHinDevHandle:%x [%s]", __FUNCTION__, __LINE__, videofd,strerror(errno));
+			continue;
+		} else {
+			ALOGE("%s open device %s successful.", __FUNCTION__, kV4l2DevicePath);
+			struct v4l2_capability cap;
+			ret = ioctl(videofd, VIDIOC_QUERYCAP, &cap);
+			if (ret < 0) {
+				ALOGE("VIDIOC_QUERYCAP Failed, error: %s", strerror(errno));
+				close(videofd);
+				continue;
+		}
+		snprintf(v4l2DeviceDriver, 16,"%s",cap.driver);
+		ALOGE("VIDIOC_QUERYCAP driver=%s,%s", cap.driver,v4l2DeviceDriver);
+		ALOGE("VIDIOC_QUERYCAP card=%s", cap.card);
+		ALOGE("VIDIOC_QUERYCAP version=%d", cap.version);
+		ALOGE("VIDIOC_QUERYCAP capabilities=0x%08x,0x%08x", cap.capabilities,V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE);
+		ALOGE("VIDIOC_QUERYCAP device_caps=0x%08x", cap.device_caps);
+		if(!strncmp(kHdmiNodeName, v4l2DeviceDriver, sizeof(kHdmiNodeName)-1)){
+			mHinDevHandle =  videofd;
+            sp<rockchip::hardware::hdmi::V1_0::IHdmi> client = rockchip::hardware::hdmi::V1_0::IHdmi::getService();
+            if(client.get()!= nullptr){
+                ALOGD("foundHdmiDevice:%s",deviceId.c_str());
+                client->foundHdmiDevice(::android::hardware::hidl_string(std::to_string(100+std::stoi(deviceId.c_str()))));
+            }
+            ALOGD("mHinDevHandle::%d ,kV4l2DevicePath:%s ,deviceId:%s",mHinDevHandle,kV4l2DevicePath,deviceId.c_str());
+			if ((cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
+				ALOGE("V4L2_CAP_VIDEO_CAPTURE is  a video capture device, capabilities: %x\n", cap.capabilities);
+					TVHAL_V4L2_BUF_TYPE = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+		}else if ((cap.capabilities & V4L2_CAP_VIDEO_CAPTURE_MPLANE)) {
+				ALOGE("V4L2_CAP_VIDEO_CAPTURE_MPLANE is  a video capture device, capabilities: %x\n", cap.capabilities);
+				TVHAL_V4L2_BUF_TYPE = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+			}
+			break;
+		}else{
+			close(videofd);
+			ALOGE("isnot hdmirx,VIDIOC_QUERYCAP driver=%s", cap.driver);
+		}
+            }
+        }
+    }
+    closedir(devdir);
+    if (mHinDevHandle < 0){
+        ALOGE("[%s %d] mHinDevHandle:%x", __FUNCTION__, __LINE__, mHinDevHandle);
+        return -1;
+    }
+    if(ExternalCameraProviderImpl_2_4::mV4l2Event){
+        ExternalCameraProviderImpl_2_4::mV4l2Event->initialize(mHinDevHandle);
+    }
+
+    id = 0;
+    initFormat=0;
+
+    mFrameWidth = initWidth;
+    mFrameHeight = initHeight;
+    mBufferSize = mFrameWidth * mFrameHeight * 3/2;
+    return 0;
+}
 bool ExternalCameraProviderImpl_2_4::HotplugThread::threadLoop() {
     // Find existing /dev/video* devices
+
+#ifdef HDMI_ENABLE
+    int id = 0,  initWidth, initHeight,initFormat ;
+    findDevice(id,initWidth,initHeight,initFormat);
+#endif
     DIR* devdir = opendir(kDevicePath);
     if(devdir == 0) {
         ALOGE("%s: cannot open %s! Exiting threadloop", __FUNCTION__, kDevicePath);

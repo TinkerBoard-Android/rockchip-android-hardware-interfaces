@@ -135,6 +135,7 @@ cc_library_shared {
         "android.hardware.graphics.mapper@2.1",
         "android.hardware.graphics.mapper@3.0",
         "android.hardware.graphics.mapper@4.0",
+	"rockchip.hardware.hdmi@1.0",
     ],
     static_libs: [
         "android.hardware.camera.common@1.0-helper",
@@ -158,6 +159,17 @@ cc_library_shared {
         "-DRK_HW_JPEG_DECODER",
         "-DRK_GRALLOC_4",
     ],
+
+    product_variables: {
+	cameraSupportHDMI: {
+	    cppflags:[
+		"-DHDMI_ENABLE",
+	    ],
+	    cflags:[
+		"-DHDMI_ENABLE",
+	    ]
+	}
+    },
     local_include_dirs: [
         "include/ext_device_v3_4_impl",
         "include/vpu_inc"],

@@ -891,6 +891,12 @@ bool ExternalCameraConfig::updateFpsList(tinyxml2::XMLElement* fpsList,
         limits.push_back(limit);
         row = row->NextSiblingElement("Limit");
     }
+#ifdef HDMI_ENABLE
+    FpsLimitation hdmilimit;
+    hdmilimit.size = {3840,2160};
+    hdmilimit.fpsUpperBound = 30.0;
+    limits.push_back(hdmilimit);
+#endif
     fpsLimits = limits;
     return true;
 }

@@ -561,6 +561,10 @@ static cam_mem_info_t* cam_mem_gralloc_ops_alloc(
 
     //halPixFmt = HAL_PIXEL_FORMAT_RGB_565;
     halPixFmt = HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED;
+#ifdef HDMI_ENABLE
+    halPixFmt = HAL_PIXEL_FORMAT_RGB_888;
+#endif
+
     grallocFlags = handle->flag;
     ret = allocate_gralloc_buffer(width,height, halPixFmt, grallocFlags, &buf_handle, &stride);
     if (ret) {

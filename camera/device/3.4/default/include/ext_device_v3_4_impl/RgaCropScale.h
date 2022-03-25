@@ -44,6 +44,19 @@ class RgaCropScale {
 		int dst_width, int dst_height,
 		int zoom_val, bool mirror, bool isNeedCrop,
 		bool isDstNV21, bool is16Align, bool isYuyvFormat);
+static int rga_rgb_nv12_scale_crop(
+		int src_width, int src_height,
+		unsigned long src_fd, unsigned long dst_fd,
+		int dst_width, int dst_height,
+		int zoom_val, bool mirror, bool isNeedCrop,
+		bool isDstNV21, bool is16Align, bool isYuyvFormat);
+
+static int rga_nv16_nv12_scale_crop(
+		int src_width, int src_height,
+		unsigned long src_fd, unsigned long dst_fd,
+		int dst_width, int dst_height,
+		int zoom_val, bool mirror, bool isNeedCrop,
+		bool isDstNV21, bool is16Align, bool isYuyvFormat);
 
 };
 

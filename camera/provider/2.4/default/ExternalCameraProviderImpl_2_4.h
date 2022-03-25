@@ -27,6 +27,7 @@
 #include "ExternalCameraUtils_3.4.h"
 
 #include "CameraProvider_2_4.h"
+#include "DeviceV4L2Event.h"
 
 namespace android {
 namespace hardware {
@@ -83,10 +84,14 @@ private:
 
     void deviceRemoved(const char* devName);
 
+    static V4L2EventCallBack hinDevEventCallback(int event_type);
+
     class HotplugThread : public android::Thread {
     public:
         HotplugThread(ExternalCameraProviderImpl_2_4* parent);
         ~HotplugThread();
+
+        int findDevice(int id, int& initWidth, int& initHeight,int& initFormat ) ;
 
         virtual bool threadLoop() override;
 
@@ -104,6 +109,8 @@ private:
     const ExternalCameraConfig mCfg;
     HotplugThread mHotPlugThread;
     int mPreferredHal3MinorVersion;
+    static sp<V4L2DeviceEvent>     mV4l2Event;
+    static ExternalCameraProviderImpl_2_4* sInstance;
 };
 
 

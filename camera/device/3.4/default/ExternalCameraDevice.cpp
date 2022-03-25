@@ -22,6 +22,8 @@
 #include <array>
 #include <regex>
 #include <linux/videodev2.h>
+#include <linux/v4l2-subdev.h>
+#include <linux/videodev2.h>
 #include "android-base/macros.h"
 #include "CameraMetadata.h"
 #include "../../3.2/default/include/convert.h"
@@ -39,8 +41,8 @@ namespace {
 // Other formats to consider in the future:
 // * V4L2_PIX_FMT_YVU420 (== YV12)
 // * V4L2_PIX_FMT_YVYU (YVYU: can be converted to YV12 or other YUV420_888 formats)
-const std::array<uint32_t, /*size*/ 5> kSupportedFourCCs{
-    {V4L2_PIX_FMT_MJPEG, V4L2_PIX_FMT_NV12, V4L2_PIX_FMT_H264, V4L2_PIX_FMT_YUYV, V4L2_PIX_FMT_Z16}};  // double braces required in C++11
+const std::array<uint32_t, /*size*/ 7> kSupportedFourCCs{
+    {V4L2_PIX_FMT_MJPEG,V4L2_PIX_FMT_RGB24 ,V4L2_PIX_FMT_NV12,V4L2_PIX_FMT_NV16 , V4L2_PIX_FMT_H264, V4L2_PIX_FMT_YUYV, V4L2_PIX_FMT_Z16}};  // double braces required in C++11
 
 constexpr int MAX_RETRY = 5; // Allow retry v4l2 open failures a few times.
 constexpr int OPEN_RETRY_SLEEP_US = 100000; // 100ms * MAX_RETRY = 0.5 seconds
@@ -278,6 +280,8 @@ status_t ExternalCameraDevice::initAvailableCapabilities(
             case V4L2_PIX_FMT_H264: hasColor = true; break;
             case V4L2_PIX_FMT_YUYV: hasColor = true; break;
             case V4L2_PIX_FMT_NV12: hasColor = true; break;
+            case V4L2_PIX_FMT_NV16: hasColor = true; break;
+            case V4L2_PIX_FMT_RGB24 : hasColor = true; break;
             default: ALOGW("%s: Unsupported format found", __FUNCTION__);
         }
     }
@@ -727,6 +731,12 @@ status_t ExternalCameraDevice::initOutputCharsKeys(
             case V4L2_PIX_FMT_H264:
                 hasColor_h264 = true;
                 break;
+            case V4L2_PIX_FMT_NV16:
+                hasColor_nv12 = true;
+                break;
+            case V4L2_PIX_FMT_RGB24 :
+                hasColor_nv12 = true;
+                break;
             default:
                 ALOGW("%s: format %c%c%c%c is not supported!", __FUNCTION__,
                       supportedFormat.fourcc & 0xFF, (supportedFormat.fourcc >> 8) & 0xFF,
@@ -830,7 +840,18 @@ void ExternalCameraDevice::getFrameRateList(
             }
         }
     }
+#ifdef HDMI_ENABLE
+    struct v4l2_capability capability;
+    int ret_query = ioctl(fd, VIDIOC_QUERYCAP, &capability);
+    if (ret_query < 0) {
+        ALOGE("%s v4l2 QUERYCAP %s failed: %s", __FUNCTION__, strerror(errno));
+    }
 
+    if(strstr((const char*)capability.driver,"hdmi")){
+        SupportedV4L2Format::FrameRate fr = {1,30};
+        format->frameRates.push_back(fr);
+    }
+#endif
     if (format->frameRates.empty()) {
         ALOGE("%s: failed to get supported frame rates for format:%c%c%c%c w %d h %d",
                 __FUNCTION__,
@@ -901,7 +922,7 @@ std::vector<SupportedV4L2Format> ExternalCameraDevice::getCandidateSupportedForm
     std::vector<SupportedV4L2Format> outFmts;
 
     // VIDIOC_QUERYCAP get Capability
-     struct v4l2_capability capability;
+    struct v4l2_capability capability;
     int ret_query = ioctl(fd, VIDIOC_QUERYCAP, &capability);
     if (ret_query < 0) {
         ALOGE("%s v4l2 QUERYCAP %s failed: %s", __FUNCTION__, strerror(errno));
@@ -962,6 +983,51 @@ std::vector<SupportedV4L2Format> ExternalCameraDevice::getCandidateSupportedForm
                         }
                     }
                 }
+#ifdef HDMI_ENABLE
+                if(strstr((const char*)capability.driver,"hdmi")){
+                    ALOGE("driver.find :%s",capability.driver);
+                    struct v4l2_dv_timings timings;
+
+                    if(TEMP_FAILURE_RETRY(ioctl(fd, VIDIOC_SUBDEV_QUERY_DV_TIMINGS, &timings)) == 0)
+                    {
+                        char fmtDesc[5]{0};
+                        sprintf(fmtDesc,"%c%c%c%c",
+                        fmtdesc.pixelformat & 0xFF,
+                        (fmtdesc.pixelformat >> 8) & 0xFF,
+                        (fmtdesc.pixelformat >> 16) & 0xFF,
+                        (fmtdesc.pixelformat >> 24) & 0xFF);
+                        ALOGV("hdmi index:%d,ret:%d, format:%s", fmtdesc.index, ret,fmtDesc);
+                        ALOGE("%s, hdmi I:%d, wxh:%dx%d", __func__,
+                        timings.bt.interlaced, timings.bt.width, timings.bt.height);
+
+                            ALOGV("add hdmi index:%d,ret:%d, format:%c%c%c%c", fmtdesc.index, ret,
+                            fmtdesc.pixelformat & 0xFF,
+                            (fmtdesc.pixelformat >> 8) & 0xFF,
+                            (fmtdesc.pixelformat >> 16) & 0xFF,
+                            (fmtdesc.pixelformat >> 24) & 0xFF);
+                            SupportedV4L2Format formatGet {
+                                .width = timings.bt.width,
+                                .height = timings.bt.height,
+                                .fourcc = fmtdesc.pixelformat
+                            };
+                            updateFpsBounds(fd, cropType, fpsLimits, formatGet, outFmts);
+
+                            SupportedV4L2Format format_640x360 {
+                                    .width = 640,
+                                    .height = 360,
+                                    .fourcc = fmtdesc.pixelformat
+                            };
+                            updateFpsBounds(fd, cropType, fpsLimits, format_640x360, outFmts);
+                            SupportedV4L2Format format_1920x1080 {
+                                    .width = 1920,
+                                    .height = 1080,
+                                    .fourcc = fmtdesc.pixelformat
+                            };
+                            updateFpsBounds(fd, cropType, fpsLimits, format_1920x1080, outFmts);
+
+                    }
+                }
+#endif
             }
         }
         fmtdesc.index++;

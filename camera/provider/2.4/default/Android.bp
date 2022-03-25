@@ -50,7 +50,20 @@ cc_library_shared {
 cc_library_shared {
     name: "android.hardware.camera.provider@2.4-external",
     proprietary: true,
-    srcs: ["ExternalCameraProviderImpl_2_4.cpp"],
+    srcs: [
+	"ExternalCameraProviderImpl_2_4.cpp",
+	"DeviceV4L2Event.cpp",
+    ],
+    product_variables: {
+	cameraSupportHDMI: {
+	    cppflags:[
+		"-DHDMI_ENABLE",
+	    ],
+	    cflags:[
+		"-DHDMI_ENABLE",
+	    ]
+	}
+    },
     shared_libs: [
         "android.hardware.camera.common@1.0",
         "android.hardware.camera.device@1.0",
@@ -78,6 +91,7 @@ cc_library_shared {
         "liblog",
         "libtinyxml2",
         "libutils",
+	"rockchip.hardware.hdmi@1.0",
     ],
     static_libs: [
         "android.hardware.camera.common@1.0-helper",
