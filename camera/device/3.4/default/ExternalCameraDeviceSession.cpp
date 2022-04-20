@@ -2614,6 +2614,7 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
                     if (camera2::RgaCropScale::CropScaleNV12Or21(&rgain, &rgaout)) {
                         ALOGW("%s: wpzz digital zoom by RGA failed!\n", __FUNCTION__);
                     }
+                    isJpegNeedCropScale = false;
                 } else {
                     camera2::RgaCropScale::rga_nv12_scale_crop(
                         tempFrameWidth, tempFrameHeight, req->mShareFd, handle_fd,
