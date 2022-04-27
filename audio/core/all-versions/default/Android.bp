@@ -1,3 +1,24 @@
+bootstrap_go_package {
+    name: "soong-devicefactory",
+    pkgPath: "android/soong/devicefactory",
+    deps: [
+        "blueprint",
+        "blueprint-pathtools",
+        "soong",
+        "soong-android",
+        "soong-cc",
+        "soong-genrule",
+    ],
+    srcs: [
+          "Android.go",
+    ],
+    pluginFor: ["soong_build"],
+}
+
+cc_devicefactory {
+   name: "cc_devicefactory_defaults",
+}
+
 package {
     // See: http://go/android-license-faq
     // A large-scale-change added 'default_applicable_licenses' to import
@@ -34,7 +55,10 @@ cc_defaults {
     vendor: true,
     srcs: [":android.hardware.audio-impl_srcs"],
 
-    defaults: ["hidl_defaults"],
+    defaults: [
+        "hidl_defaults",
+        "cc_devicefactory_defaults",
+    ],
 
     static_libs: [
         "libaudiofoundation",
