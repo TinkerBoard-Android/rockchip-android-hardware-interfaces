@@ -405,11 +405,13 @@ static v4l2_buf_type TVHAL_V4L2_BUF_TYPE = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 		ALOGE("VIDIOC_QUERYCAP device_caps=0x%08x", cap.device_caps);
 		if(!strncmp(kHdmiNodeName, v4l2DeviceDriver, sizeof(kHdmiNodeName)-1)){
 			mHinDevHandle =  videofd;
+#ifdef HDMI_ENABLE
             sp<rockchip::hardware::hdmi::V1_0::IHdmi> client = rockchip::hardware::hdmi::V1_0::IHdmi::getService();
             if(client.get()!= nullptr){
                 ALOGD("foundHdmiDevice:%s",deviceId.c_str());
                 client->foundHdmiDevice(::android::hardware::hidl_string(std::to_string(100+std::stoi(deviceId.c_str()))));
             }
+#endif
             ALOGD("mHinDevHandle::%d ,kV4l2DevicePath:%s ,deviceId:%s",mHinDevHandle,kV4l2DevicePath,deviceId.c_str());
 			if ((cap.capabilities & V4L2_CAP_VIDEO_CAPTURE)) {
 				ALOGE("V4L2_CAP_VIDEO_CAPTURE is  a video capture device, capabilities: %x\n", cap.capabilities);
