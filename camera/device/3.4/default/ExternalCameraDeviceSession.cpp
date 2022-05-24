@@ -45,6 +45,11 @@
 #include <poll.h>
 #include <unistd.h>
 
+
+#include "ExternalCameraDevice_3_4.h"
+#include "subvideo.h"
+
+
 #ifdef HDMI_ENABLE
 #include <rockchip/hardware/hdmi/1.0/IHdmi.h>
 #endif
@@ -56,6 +61,7 @@
 #define PLANES_NUM 1
 
 #define RK_GRALLOC_USAGE_SPECIFY_STRIDE 1ULL << 30
+
 
 //#define DUMP_YUV
 typedef struct Camerawindow {
@@ -364,6 +370,29 @@ bool ExternalCameraDeviceSession::initialize() {
     mV4L2EventThread->v4l2pipe();
     mV4L2EventThread->run("HDMIEvent", PRIORITY_DISPLAY);
 #endif
+
+#ifdef HDMI_ENABLE
+#ifdef HDMI_SUBVIDEO_ENABLE
+    sp<rockchip::hardware::hdmi::V1_0::IHdmi> client = rockchip::hardware::hdmi::V1_0::IHdmi::getService();
+    if(client.get()!= nullptr){
+        ::android::hardware::hidl_string deviceId;
+        client->getHdmiDeviceId( [&](const ::android::hardware::hidl_string &id){
+                deviceId = id.c_str();
+        });
+        ALOGE("getHdmiDeviceId:%s",deviceId.c_str());
+        if(strstr(deviceId.c_str(), mCameraId.c_str())){
+                ALOGE("HDMI attach SubVideo %s",mCameraId.c_str());
+            if(strlen(ExternalCameraDevice::kSubDevName)>0){
+                sprintf(main_ctx.dev_name,"%s",ExternalCameraDevice::kSubDevName);
+                ALOGE("main_ctx.dev_name:%s",main_ctx.dev_name);
+            }
+            mSubVideoThread = new SubVideoThread(0);
+            mSubVideoThread->run("SubVideo", PRIORITY_DISPLAY);
+        }
+     }
+#endif
+#endif
+
     return false;
 }
 
@@ -391,6 +420,11 @@ void ExternalCameraDeviceSession::closeOutputThreadImpl() {
         mOutputThread->requestExit();
         mOutputThread->join();
         mOutputThread.clear();
+    }
+    if(mSubVideoThread){
+        mSubVideoThread->requestExit();
+        mSubVideoThread->join();
+        mSubVideoThread.clear();
     }
 }
 
@@ -687,6 +721,12 @@ Return<void> ExternalCameraDeviceSession::close(bool callerIsDtor) {
             mV4L2EventThread->requestExit();
             mV4L2EventThread->join();
             mV4L2EventThread.clear();
+        }
+
+        if(mSubVideoThread){
+            mSubVideoThread->requestExit();
+            mSubVideoThread->join();
+            mSubVideoThread.clear();
         }
 
         Mutex::Autolock _l(mLock);
@@ -1208,6 +1248,114 @@ extern "C" void debugShowFPS() {
     }
 }
 
+ExternalCameraDeviceSession::SubVideoThread::SubVideoThread(int fd){
+    ALOGE("@%s",__FUNCTION__);
+    int ret = mHWJpegDecoder.prepareDecoder();
+    if (!ret) {
+        ALOGE("failed to prepare JPEG decoder");
+        mHWJpegDecoder.flushBuffer();
+    }
+
+    memset(&mHWDecoderFrameOut, 0, sizeof(MpiJpegDecoder::OutputFrame_t));
+
+    open_device(&main_ctx);
+    init_device(&main_ctx);
+}
+
+int ExternalCameraDeviceSession::SubVideoThread::read_frame()
+{
+    ALOGE("@%s",__FUNCTION__);
+    demo_context_t *ctx = &main_ctx;
+    struct v4l2_buffer buf;
+    int i, bytesused;
+
+    CLEAR(buf);
+
+    buf.type = ctx->buf_type;
+    buf.memory = V4L2_MEMORY_MMAP;
+
+    struct v4l2_plane planes[FMT_NUM_PLANES];
+    memset(planes, 0, sizeof(struct v4l2_plane)*FMT_NUM_PLANES);
+    if (V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE == ctx->buf_type) {
+        buf.m.planes = planes;
+        buf.length = FMT_NUM_PLANES;
+    }
+
+    if (-1 == xioctl(ctx->fd, VIDIOC_DQBUF, &buf))
+        errno_exit(ctx, "VIDIOC_DQBUF");
+
+    i = buf.index;
+
+    if (V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE == ctx->buf_type)
+        bytesused = buf.m.planes[0].bytesused;
+    else
+        bytesused = buf.bytesused;
+
+    if(bytesused>0){
+        process_image(ctx->buffers[i].start,  buf.sequence, bytesused);
+    }
+
+    if (-1 == ioctl(ctx->fd, VIDIOC_QBUF, &buf))
+        errno_exit(ctx, "VIDIOC_QBUF");
+
+    return 1;
+}
+ExternalCameraDeviceSession::SubVideoThread::~SubVideoThread(){
+    ALOGE("@%s",__FUNCTION__);
+    uninit_device(&main_ctx);
+    close_device(&main_ctx);
+    main_ctx.pixels = nullptr;
+    mHWJpegDecoder.flushBuffer();
+}
+
+void ExternalCameraDeviceSession::SubVideoThread::process_image(const void *p, int sequence, int size)
+{
+    ALOGE("@%s,sequence:%d,copy size:%d",__FUNCTION__,sequence,size);
+    if(jpegDecoder((uint8_t*) p, size)){
+        main_ctx.pixels = mHWDecoderFrameOut.MemVirAddr;
+    }
+}
+int ExternalCameraDeviceSession::SubVideoThread::jpegDecoder(uint8_t* inData, size_t inDataSize) {
+    int ret = 0;
+    unsigned int output_len = 0;
+    unsigned int input_len = inDataSize;
+    char *srcbuf = (char*)inData;
+
+    mHWJpegDecoder.deinitOutputFrame(&mHWDecoderFrameOut);
+    if (input_len <= 0) {
+        LOGE("frame size is invalid !");
+        return -1;
+    }
+
+    if ((srcbuf[0] == 0xff) && (srcbuf[1] == 0xd8) && (srcbuf[2] == 0xff)) {
+        // decoder to NV12
+        ret = mHWJpegDecoder.decodePacket((char*)inData, inDataSize, &mHWDecoderFrameOut);
+        if (!ret) {
+            ALOGE("mjpeg decodePacket failed!");
+            mHWJpegDecoder.flushBuffer();
+        }
+    } else {
+        LOGE("mjpeg data error!!");
+        return -1;
+    }
+
+    ALOGE("@%s,MemVirAddr:%p,OutputSize：%d",
+    __FUNCTION__,mHWDecoderFrameOut.MemVirAddr,mHWDecoderFrameOut.OutputSize);
+    return ret;
+}
+
+
+bool ExternalCameraDeviceSession::SubVideoThread::threadLoop(){
+    while (!exitPending()&&((main_ctx.frame_count == -1) || (main_ctx.frame_count-- > 0))) {
+        read_frame();
+    }
+    stop_capturing(&main_ctx);
+    if(exitPending()){
+        return false;
+    }
+    return true;
+}
+
 ExternalCameraDeviceSession::V4L2EventThread::V4L2EventThread(int fd, wp<OutputThreadInterface> parent){
     mVideoFd = fd;
     mParent = parent;
@@ -1656,7 +1804,6 @@ bool ExternalCameraDeviceSession::FormatConvertThread::threadLoop() {
     req->inData = inData;
     req->inDataSize = inDataSize;
     mFmtOutputThread->submitRequest(req);
-
     return true;
 }
 
@@ -2783,6 +2930,9 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
                     ALOGV("%s(%d) halbuf_wxh(%dx%d) frameNumber(%d)", __FUNCTION__, __LINE__,
                         halBuf.width, halBuf.height, req->frameNumber);
                     unsigned long vir_addr =  reinterpret_cast<unsigned long>(req->inData);
+#ifdef HDMI_SUBVIDEO_ENABLE
+                    processHdmiWithCamera(req->inData,tempFrameWidth,tempFrameHeight,0x7 << 8,main_ctx.pixels,main_ctx.width,main_ctx.height,HAL_PIXEL_FORMAT_YCrCb_NV12);
+#endif
                     camera2::RgaCropScale::rga_scale_crop(
                         tempFrameWidth, tempFrameHeight, vir_addr,0x7 << 8, handle_fd,
                         halBuf.width, halBuf.height, 100, false, true,
@@ -3516,7 +3666,9 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
             return -errno;
         }
     }
-
+#ifdef HDMI_SUBVIDEO_ENABLE
+    start_capturing(&main_ctx);
+#endif
     // VIDIOC_STREAMON: start streaming
     v4l2_buf_type capture_type;
     if (mCapability.device_caps & V4L2_CAP_VIDEO_CAPTURE_MPLANE)

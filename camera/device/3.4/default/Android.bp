@@ -88,7 +88,8 @@ cc_library_shared {
         "ExternalCameraMemManager.cpp",
         "ExternalCameraGralloc4.cpp",
         "rkvpu_dec_api.cpp",
-        "osd.cpp"
+        "osd.cpp",
+        "subvideo.cpp"
     ],
     include_dirs: [
         "hardware/rockchip/libhwjpeg/inc",
@@ -173,6 +174,14 @@ cc_library_shared {
             ],
             cflags:[
             "-DHDMI_ENABLE",
+            ]
+        },
+        cameraSupportHDMISubVideo: {
+            cppflags:[
+            "-DHDMI_SUBVIDEO_ENABLE",
+            ],
+            cflags:[
+            "-DHDMI_SUBVIDEO_ENABLE",
             ]
         },
         cameraSupportOSD: {

@@ -86,7 +86,9 @@ struct ExternalCameraDevice : public virtual RefBase {
     // Forward the dump call to the opened session, or do nothing
     Return<void> dumpState(const ::android::hardware::hidl_handle&);
     /* End of Methods from ::android::hardware::camera::device::V3_2::ICameraDevice */
-
+#ifdef HDMI_SUBVIDEO_ENABLE
+    static char kSubDevName[255];
+#endif
 protected:
     // Overridden by child implementations for returning different versions of
     // ExternalCameraDeviceSession

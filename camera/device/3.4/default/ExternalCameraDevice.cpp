@@ -29,6 +29,12 @@
 #include "../../3.2/default/include/convert.h"
 #include "ExternalCameraDevice_3_4.h"
 
+#ifdef HDMI_ENABLE
+#ifdef HDMI_SUBVIDEO_ENABLE
+#include <rockchip/hardware/hdmi/1.0/IHdmi.h>
+#endif
+#endif
+
 namespace android {
 namespace hardware {
 namespace camera {
@@ -48,6 +54,12 @@ constexpr int MAX_RETRY = 5; // Allow retry v4l2 open failures a few times.
 constexpr int OPEN_RETRY_SLEEP_US = 100000; // 100ms * MAX_RETRY = 0.5 seconds
 
 } // anonymous namespace
+
+
+#ifdef HDMI_SUBVIDEO_ENABLE
+char android::hardware::camera::device::V3_4::implementation::ExternalCameraDevice::kSubDevName[255]={};
+#endif
+
 
 const std::regex kDevicePathRE("/dev/video([0-9]+)");
 
@@ -80,6 +92,23 @@ bool ExternalCameraDevice::isInitFailedLocked() {
         }
         mInitialized = true;
     }
+
+#ifdef HDMI_ENABLE
+#ifdef HDMI_SUBVIDEO_ENABLE
+    sp<rockchip::hardware::hdmi::V1_0::IHdmi> client = rockchip::hardware::hdmi::V1_0::IHdmi::getService();
+    if(client.get()!= nullptr){
+        ::android::hardware::hidl_string deviceId;
+        client->getHdmiDeviceId( [&](const ::android::hardware::hidl_string &id){
+                deviceId = id.c_str();
+        });
+        ALOGE("init getHdmiDeviceId:%s",deviceId.c_str());
+        if(!mInitFailed&&!strstr(deviceId.c_str(), mCameraId.c_str())){
+            sprintf(ExternalCameraDevice::kSubDevName,"%s",mDevicePath.c_str());
+            ALOGE("@%s, init found device,%s",__FUNCTION__,ExternalCameraDevice::kSubDevName);
+        }
+     }
+#endif
+#endif
     return mInitFailed;
 }
 

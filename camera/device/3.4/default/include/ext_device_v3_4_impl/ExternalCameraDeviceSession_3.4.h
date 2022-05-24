@@ -244,6 +244,20 @@ struct ExternalCameraDeviceSession : public virtual RefBase,
             wp<OutputThreadInterface> mParent;
     };
 
+    class SubVideoThread : public android::Thread {
+        public:
+            SubVideoThread(int fd);
+            ~SubVideoThread();
+            virtual bool threadLoop() override;
+        private :
+            int read_frame();
+            void process_image(const void *p, int sequence, int size);
+            int jpegDecoder(uint8_t* inData, size_t inDataSize);
+            MpiJpegDecoder mHWJpegDecoder;
+            MpiJpegDecoder::OutputFrame_t mHWDecoderFrameOut;
+            int mVideoFd;
+    };
+
 protected:
 
     // Methods from ::android::hardware::camera::device::V3_2::ICameraDeviceSession follow
@@ -413,6 +427,7 @@ protected:
     sp<OutputThread> mOutputThread;
     sp<FormatConvertThread> mFormatConvertThread;
     sp<V4L2EventThread> mV4L2EventThread;
+    sp<SubVideoThread> mSubVideoThread;
 
     // Stream ID -> Camera3Stream cache
     std::unordered_map<int, Stream> mStreamMap;
