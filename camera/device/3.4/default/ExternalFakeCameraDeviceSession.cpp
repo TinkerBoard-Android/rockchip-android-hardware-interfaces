@@ -33,6 +33,7 @@
 
 #include <jpeglib.h>
 #include "RgaCropScale.h"
+#include <RockchipRga.h>
 #include "ExternalCameraGralloc4.h"
 #define NV12_HW_CONVERT
 #define PLANES_NUM 1
@@ -2075,8 +2076,9 @@ bool ExternalFakeCameraDeviceSession::OutputThread::threadLoop() {
                     ALOGV("%s(%d) halbuf_wxh(%dx%d) frameNumber(%d)", __FUNCTION__, __LINE__,
                         halBuf.width, halBuf.height, req->frameNumber);
                     unsigned long vir_addr =  reinterpret_cast<unsigned long>(req->inData);
-                    camera2::RgaCropScale::rga_nv12_scale_crop(
-                        tempFrameWidth, tempFrameHeight, vir_addr, handle_fd,
+                    camera2::RgaCropScale::rga_scale_crop(
+                        tempFrameWidth, tempFrameHeight, vir_addr,
+                        HAL_PIXEL_FORMAT_YCrCb_NV12, handle_fd,
                         halBuf.width, halBuf.height, 100, false, true,
                         (halBuf.format == PixelFormat::YCRCB_420_SP), is16Align,
                         true);
@@ -2151,8 +2153,9 @@ bool ExternalFakeCameraDeviceSession::OutputThread::threadLoop() {
                     ALOGV("%s(%d) halbuf_wxh(%dx%d) frameNumber(%d)", __FUNCTION__, __LINE__,
                         halBuf.width, halBuf.height, req->frameNumber);
 
-                    camera2::RgaCropScale::rga_nv12_scale_crop(
-                        tempFrameWidth, tempFrameHeight, req->mShareFd, handle_fd,
+                    camera2::RgaCropScale::rga_scale_crop(
+                        tempFrameWidth, tempFrameHeight, req->mShareFd,
+                        HAL_PIXEL_FORMAT_YCrCb_NV12, handle_fd,
                         halBuf.width, halBuf.height, 100, false, true,
                         (halBuf.format == PixelFormat::YCRCB_420_SP), is16Align,
                         req->yuvframeIn->mFourcc == V4L2_PIX_FMT_YUYV);

@@ -31,6 +31,10 @@ class RgaCropScale {
         int height_stride;
         int width;
         int height;
+        int blend;
+        int translate_x;
+        int translate_y;
+        int rotation;
         /* only support NV12,NV21 now */
         int fmt;
         /* just for src params */
@@ -38,25 +42,14 @@ class RgaCropScale {
     };
 
     static int CropScaleNV12Or21(struct Params* in, struct Params* out);
-    static int rga_nv12_scale_crop(
+    static int rga_scale_crop(
 		int src_width, int src_height,
-		unsigned long src_fd, unsigned long dst_fd,
-		int dst_width, int dst_height,
-		int zoom_val, bool mirror, bool isNeedCrop,
-		bool isDstNV21, bool is16Align, bool isYuyvFormat);
-static int rga_rgb_nv12_scale_crop(
-		int src_width, int src_height,
-		unsigned long src_fd, unsigned long dst_fd,
+		unsigned long src_fd,int src_format, unsigned long dst_fd,
 		int dst_width, int dst_height,
 		int zoom_val, bool mirror, bool isNeedCrop,
 		bool isDstNV21, bool is16Align, bool isYuyvFormat);
 
-static int rga_nv16_nv12_scale_crop(
-		int src_width, int src_height,
-		unsigned long src_fd, unsigned long dst_fd,
-		int dst_width, int dst_height,
-		int zoom_val, bool mirror, bool isNeedCrop,
-		bool isDstNV21, bool is16Align, bool isYuyvFormat);
+static int Im2dBlit(struct Params* in,  struct Params* out);
 
 };
 

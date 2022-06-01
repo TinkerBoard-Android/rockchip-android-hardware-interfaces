@@ -18,6 +18,10 @@
 #include <utils/Singleton.h>
 #include <RockchipRga.h>
 #include <im2d_api/im2d.h>
+#include "im2d_api/im2d.hpp"
+#include "im2d_api/im2d_common.h"
+
+#include "osd.h"
 
 namespace android {
 namespace camera2 {
@@ -35,6 +39,8 @@ namespace camera2 {
 #define RGA_VIRTUAL_H (2048)
 
 #endif
+
+
 
 int RgaCropScale::CropScaleNV12Or21(struct Params* in, struct Params* out)
 {
@@ -132,9 +138,9 @@ int RgaCropScale::CropScaleNV12Or21(struct Params* in, struct Params* out)
     return 0;
 }
 
-int RgaCropScale::rga_nv12_scale_crop(
+int RgaCropScale::rga_scale_crop(
 		int src_width, int src_height,
-		unsigned long src_fd, unsigned long dst_fd,
+		unsigned long src_fd, int src_format,unsigned long dst_fd,
 		int dst_width, int dst_height,
 		int zoom_val, bool mirror, bool isNeedCrop,
 		bool isDstNV21, bool is16Align, bool isYuyvFormat)
@@ -152,18 +158,16 @@ int RgaCropScale::rga_nv12_scale_crop(
     im_handle_param_t param;
     param.width = src_width;
     param.height = src_height;
-    param.format = HAL_PIXEL_FORMAT_YCrCb_NV12;
+    param.format = src_format;
 
     memset(&src, 0, sizeof(rga_info_t));
     if (isYuyvFormat) {
         src.fd = -1;
         src.virAddr = (void*)src_fd;
         src_handle = importbuffer_virtualaddr(src.virAddr, &param);
-        ALOGD("@%s，src virtual:%p,width:%d,height:%d",__FUNCTION__,src.virAddr,param.width,param.height);
     } else {
         src.fd = src_fd;
         src_handle = importbuffer_fd(src.fd, &param);
-        ALOGD("@%s，src fd:%d,width:%d,height:%d",__FUNCTION__,src.fd,param.width,param.height);
     }
     src.mmuFlag = ((2 & 0x3) << 4) | 1 | (1 << 8) | (1 << 10);
     memset(&dst, 0, sizeof(rga_info_t));
@@ -216,7 +220,7 @@ int RgaCropScale::rga_nv12_scale_crop(
 
     rga_set_rect(&src.rect, zoom_left_offset, zoom_top_offset,
                 zoom_cropW, zoom_cropH, src_width,
-                src_height, HAL_PIXEL_FORMAT_YCrCb_NV12);
+                src_height, src_format);
     if (isDstNV21)
         rga_set_rect(&dst.rect, 0, 0, dst_width, dst_height,
                     dst_width, dst_height,
@@ -239,239 +243,89 @@ int RgaCropScale::rga_nv12_scale_crop(
         ALOGE("%s:rga blit failed", __FUNCTION__);
         goto END;
     }
-
-    END:
-    releasebuffer_handle(src_handle);
-    releasebuffer_handle(dst_handle);
-    return ret;
-}
-int RgaCropScale::rga_rgb_nv12_scale_crop(
-		int src_width, int src_height,
-		unsigned long src_fd, unsigned long dst_fd,
-		int dst_width, int dst_height,
-		int zoom_val, bool mirror, bool isNeedCrop,
-		bool isDstNV21, bool is16Align, bool isYuyvFormat)
-{
-    int ret = 0;
-    rga_info_t src,dst;
-    int zoom_cropW,zoom_cropH;
-    int ratio = 0;
-    int zoom_top_offset=0,zoom_left_offset=0;
-    rga_buffer_handle_t src_handle;
-    rga_buffer_handle_t dst_handle;
-
-    RockchipRga& rkRga(RockchipRga::get());
-
-    im_handle_param_t param;
-    param.width = src_width;
-    param.height = src_height;
-    param.format = 0x7 << 8;
-
-    memset(&src, 0, sizeof(rga_info_t));
-    if (isYuyvFormat) {
-        src.fd = -1;
-        src.virAddr = (void*)src_fd;
-        src_handle = importbuffer_virtualaddr(src.virAddr, &param);
-        ALOGD("@%s，src virtual:%p,width:%d,height:%d",__FUNCTION__,src.virAddr,param.width,param.height);
-    } else {
-        src.fd = src_fd;
-        src_handle = importbuffer_fd(src.fd, &param);
-        ALOGD("@%s，src fd:%d,width:%d,height:%d",__FUNCTION__,src.fd,param.width,param.height);
-    }
-    src.mmuFlag = ((2 & 0x3) << 4) | 1 | (1 << 8) | (1 << 10);
-    memset(&dst, 0, sizeof(rga_info_t));
-    dst.fd = dst_fd;
-    param.width = dst_width;
-    param.height = dst_height;
-    if (isDstNV21){
-        param.format = HAL_PIXEL_FORMAT_YCrCb_420_SP;
-    }else{
-        param.format = HAL_PIXEL_FORMAT_YCrCb_NV12;
-    }
-
-    dst_handle = importbuffer_fd(dst.fd, &param);
-    ALOGD("@%s， dst fd:%d,width:%d,height:%d,isDstNV21:%d",__FUNCTION__,dst.fd,param.width,param.height,isDstNV21);
-    dst.mmuFlag = ((2 & 0x3) << 4) | 1 | (1 << 8) | (1 << 10);
-
-    if((dst_width > RGA_VIRTUAL_W) || (dst_height > RGA_VIRTUAL_H)){
-        ALOGE("(dst_width > RGA_VIRTUAL_W) || (dst_height > RGA_VIRTUAL_H), switch to arm ");
-        ret = -1;
-        goto END;
-    }
-
-    //need crop ? when cts FOV,don't crop
-    if(isNeedCrop && (src_width*100/src_height) != (dst_width*100/dst_height)) {
-        ratio = ((src_width*100/dst_width) >= (src_height*100/dst_height))?
-                (src_height*100/dst_height):
-                (src_width*100/dst_width);
-        zoom_cropW = (ratio*dst_width/100) & (~0x01);
-        zoom_cropH = (ratio*dst_height/100) & (~0x01);
-        zoom_left_offset=((src_width-zoom_cropW)>>1) & (~0x01);
-        zoom_top_offset=((src_height-zoom_cropH)>>1) & (~0x01);
-    }else{
-        zoom_cropW = src_width;
-        zoom_cropH = src_height;
-        zoom_left_offset=0;
-        zoom_top_offset=0;
-    }
-
-    if(zoom_val > 100){
-        zoom_cropW = zoom_cropW*100/zoom_val & (~0x01);
-        zoom_cropH = zoom_cropH*100/zoom_val & (~0x01);
-        zoom_left_offset = ((src_width-zoom_cropW)>>1) & (~0x01);
-        zoom_top_offset= ((src_height-zoom_cropH)>>1) & (~0x01);
-    }
-
-    //usb camera height align to 16,the extra eight rows need to be croped.
-    if(!is16Align){
-        zoom_top_offset = zoom_top_offset & (~0x07);
-    }
-
-    rga_set_rect(&src.rect, zoom_left_offset, zoom_top_offset,
-                zoom_cropW, zoom_cropH, src_width,
-                src_height, 0x7 << 8);
-    if (isDstNV21)
-        rga_set_rect(&dst.rect, 0, 0, dst_width, dst_height,
-                    dst_width, dst_height,
-                    HAL_PIXEL_FORMAT_YCrCb_420_SP);
-    else
-        rga_set_rect(&dst.rect, 0,0,dst_width,dst_height,
-                    dst_width,dst_height,
-                    HAL_PIXEL_FORMAT_YCrCb_NV12);
-
-    if (mirror)
-        src.rotation = DRM_RGA_TRANSFORM_FLIP_H;
-    //TODO:sina,cosa,scale_mode,render_mode
-
-    src.handle = src_handle;
-    src.fd = 0;
-    dst.handle = dst_handle;
-    dst.fd = 0;
-    ret = rkRga.RkRgaBlit(&src, &dst, NULL);
-    if (ret) {
-        ALOGE("%s:rga blit failed", __FUNCTION__);
-        goto END;
-    }
-
+#ifdef OSD_ENABLE
+    android::hardware::camera::device::V3_4::implementation::processOSD(dst_width,dst_height,dst_fd);
+#endif
     END:
     releasebuffer_handle(src_handle);
     releasebuffer_handle(dst_handle);
     return ret;
 }
 
-
-int RgaCropScale::rga_nv16_nv12_scale_crop(
-		int src_width, int src_height,
-		unsigned long src_fd, unsigned long dst_fd,
-		int dst_width, int dst_height,
-		int zoom_val, bool mirror, bool isNeedCrop,
-		bool isDstNV21, bool is16Align, bool isYuyvFormat)
+int RgaCropScale::Im2dBlit(struct Params* in, struct Params* out)
 {
-    int ret = 0;
-    rga_info_t src,dst;
-    int zoom_cropW,zoom_cropH;
-    int ratio = 0;
-    int zoom_top_offset=0,zoom_left_offset=0;
-    rga_buffer_handle_t src_handle;
+	im_rect         src_rect;
+	im_rect         dst_rect;
+	rga_buffer_t     src;
+	rga_buffer_t     dst;
+	int ret = 0;
+	memset(&src_rect, 0, sizeof(src_rect));
+	memset(&dst_rect, 0, sizeof(dst_rect));
+	memset(&src, 0, sizeof(src));
+	memset(&dst, 0, sizeof(dst));
+
+	im_handle_param_t param_in,param_out;
+
+	rga_buffer_handle_t src_handle;
     rga_buffer_handle_t dst_handle;
+	param_in.width = in->width;
+	param_in.height = in->height;
+	param_in.format = in->fmt;
 
-    RockchipRga& rkRga(RockchipRga::get());
+	param_out.width = out->width;
+	param_out.height = out->height;
+	param_out.format = out->fmt;
 
-    im_handle_param_t param;
-    param.width = src_width;
-    param.height = src_height;
-    param.format = RK_FORMAT_YCbCr_422_SP;
+	if (in->fd == -1) {
+	   src_handle = importbuffer_virtualaddr((void*)in->vir_addr, &param_in);
+	} else {
+	   src_handle = importbuffer_fd(in->fd, &param_in);
+	}
 
-    memset(&src, 0, sizeof(rga_info_t));
-    if (isYuyvFormat) {
-        src.fd = -1;
-        src.virAddr = (void*)src_fd;
-        src_handle = importbuffer_virtualaddr(src.virAddr, &param);
-        ALOGD("@%s，src virtual:%p,width:%d,height:%d",__FUNCTION__,src.virAddr,param.width,param.height);
-    } else {
-        src.fd = src_fd;
-        src_handle = importbuffer_fd(src.fd, &param);
-        ALOGD("@%s，src fd:%d,width:%d,height:%d",__FUNCTION__,src.fd,param.width,param.height);
-    }
-    src.mmuFlag = ((2 & 0x3) << 4) | 1 | (1 << 8) | (1 << 10);
-    memset(&dst, 0, sizeof(rga_info_t));
-    dst.fd = dst_fd;
-    param.width = dst_width;
-    param.height = dst_height;
-    if (isDstNV21){
-        param.format = HAL_PIXEL_FORMAT_YCrCb_420_SP;
-    }else{
-        param.format = HAL_PIXEL_FORMAT_YCrCb_NV12;
-    }
+	if (out->fd == -1) {
+	   dst_handle = importbuffer_virtualaddr((void*)out->vir_addr, &param_out);
+	} else {
+	   dst_handle = importbuffer_fd(out->fd, &param_out);
+	}
 
-    dst_handle = importbuffer_fd(dst.fd, &param);
-    ALOGD("@%s， dst fd:%d,width:%d,height:%d,isDstNV21:%d",__FUNCTION__,dst.fd,param.width,param.height,isDstNV21);
-    dst.mmuFlag = ((2 & 0x3) << 4) | 1 | (1 << 8) | (1 << 10);
+	src = wrapbuffer_handle(src_handle, in->width, in->height, in->fmt);
+	dst = wrapbuffer_handle(dst_handle, out->width, out->height, out->fmt);
 
-    if((dst_width > RGA_VIRTUAL_W) || (dst_height > RGA_VIRTUAL_H)){
-        ALOGE("(dst_width > RGA_VIRTUAL_W) || (dst_height > RGA_VIRTUAL_H), switch to arm ");
-        ret = -1;
-        goto END;
-    }
+	if(src.width == 0 || dst.width == 0) {
+        releasebuffer_handle(src_handle);
+        releasebuffer_handle(dst_handle);
+		return -1;
+	}
 
-    //need crop ? when cts FOV,don't crop
-    if(isNeedCrop && (src_width*100/src_height) != (dst_width*100/dst_height)) {
-        ratio = ((src_width*100/dst_width) >= (src_height*100/dst_height))?
-                (src_height*100/dst_height):
-                (src_width*100/dst_width);
-        zoom_cropW = (ratio*dst_width/100) & (~0x01);
-        zoom_cropH = (ratio*dst_height/100) & (~0x01);
-        zoom_left_offset=((src_width-zoom_cropW)>>1) & (~0x01);
-        zoom_top_offset=((src_height-zoom_cropH)>>1) & (~0x01);
-    }else{
-        zoom_cropW = src_width;
-        zoom_cropH = src_height;
-        zoom_left_offset=0;
-        zoom_top_offset=0;
-    }
+	dst.width = src.width;
+	dst.height = src.height;
 
-    if(zoom_val > 100){
-        zoom_cropW = zoom_cropW*100/zoom_val & (~0x01);
-        zoom_cropH = zoom_cropH*100/zoom_val & (~0x01);
-        zoom_left_offset = ((src_width-zoom_cropW)>>1) & (~0x01);
-        zoom_top_offset= ((src_height-zoom_cropH)>>1) & (~0x01);
-    }
+	im_opt_t opt;
+	rga_buffer_t pat;
+	im_rect srect;
+	im_rect drect;
+	im_rect prect;
+	int usage = 0;
+	empty_structure(NULL, NULL, &pat, &srect, &drect, &prect, &opt);
 
-    //usb camera height align to 16,the extra eight rows need to be croped.
-    if(!is16Align){
-        zoom_top_offset = zoom_top_offset & (~0x07);
-    }
+	usage |= IM_SYNC;
+	if (in->blend > 0 && (in->translate_x > 0 || in->translate_y  > 0)) {
+		usage |= IM_ALPHA_BLEND_DST_OVER;
+		prect.x = 0;
+		prect.y = 0;
+		prect.width = src.width;
+		prect.height = src.height;
 
-    rga_set_rect(&src.rect, zoom_left_offset, zoom_top_offset,
-                zoom_cropW, zoom_cropH, src_width,
-                src_height, RK_FORMAT_YCbCr_422_SP);
-    if (isDstNV21)
-        rga_set_rect(&dst.rect, 0, 0, dst_width, dst_height,
-                    dst_width, dst_height,
-                    HAL_PIXEL_FORMAT_YCrCb_420_SP);
-    else
-        rga_set_rect(&dst.rect, 0,0,dst_width,dst_height,
-                    dst_width,dst_height,
-                    HAL_PIXEL_FORMAT_YCrCb_NV12);
+		drect.x = in->translate_x;
+		drect.y = in->translate_y;
+		drect.width = dst.width;  //640
+		drect.height = dst.height;//480
+		ret = improcess(dst, dst, src, drect, drect, prect, usage);
+	}
 
-    if (mirror)
-        src.rotation = DRM_RGA_TRANSFORM_FLIP_H;
-    //TODO:sina,cosa,scale_mode,render_mode
-
-    src.handle = src_handle;
-    src.fd = 0;
-    dst.handle = dst_handle;
-    dst.fd = 0;
-    ret = rkRga.RkRgaBlit(&src, &dst, NULL);
-    if (ret) {
-        ALOGE("%s:rga blit failed", __FUNCTION__);
-        goto END;
-    }
-
-    END:
     releasebuffer_handle(src_handle);
     releasebuffer_handle(dst_handle);
-    return ret;
+	return ret;
 }
 
 } /* namespace camera2 */

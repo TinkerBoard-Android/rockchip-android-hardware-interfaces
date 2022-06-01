@@ -87,13 +87,17 @@ cc_library_shared {
         "RgaCropScale.cpp",
         "ExternalCameraMemManager.cpp",
         "ExternalCameraGralloc4.cpp",
-        "rkvpu_dec_api.cpp"
+        "rkvpu_dec_api.cpp",
+        "osd.cpp"
     ],
     include_dirs: [
         "hardware/rockchip/libhwjpeg/inc",
         "hardware/rockchip/libhwjpeg/inc/mpp_inc",
         "hardware/rockchip/librga",
         "external/libdrm/include/drm",
+        "external/freetype/include",
+        "external/freetype/include/freetype",
+        "external/zlib"
     ],
     header_libs: [
         "gl_headers",
@@ -120,6 +124,7 @@ cc_library_shared {
         "libsync",
         "libyuv",
         "libjpeg",
+        "libpng",
         "libexif",
         "libtinyxml2",
         "libui",
@@ -140,6 +145,7 @@ cc_library_shared {
     static_libs: [
         "android.hardware.camera.common@1.0-helper",
         "libgrallocusage",
+        "libft2.nodep",
     ],
     // bufferhub is not used when building libgui for vendors
     target: {
@@ -161,14 +167,22 @@ cc_library_shared {
     ],
 
     product_variables: {
-	cameraSupportHDMI: {
-	    cppflags:[
-		"-DHDMI_ENABLE",
-	    ],
-	    cflags:[
-		"-DHDMI_ENABLE",
-	    ]
-	}
+        cameraSupportHDMI: {
+            cppflags:[
+            "-DHDMI_ENABLE",
+            ],
+            cflags:[
+            "-DHDMI_ENABLE",
+            ]
+        },
+        cameraSupportOSD: {
+            cppflags:[
+            "-DOSD_ENABLE",
+            ],
+            cflags:[
+            "-DOSD_ENABLE",
+            ]
+        }
     },
     local_include_dirs: [
         "include/ext_device_v3_4_impl",

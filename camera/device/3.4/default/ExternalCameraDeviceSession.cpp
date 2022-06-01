@@ -1483,9 +1483,10 @@ int ExternalCameraDeviceSession::FormatConvertThread::h264Decoder(unsigned long 
                  return vframe.ErrorInfo;
             }
             //memcpy(outData,vframe.vpumem.vir_addr,vframe.vpumem.size);
-            camera2::RgaCropScale::rga_nv12_scale_crop(
+            camera2::RgaCropScale::rga_scale_crop(
                 vframe.FrameWidth, vframe.FrameHeight,
-                (unsigned long)vframe.vpumem.vir_addr, dst_fd,
+                (unsigned long)vframe.vpumem.vir_addr,
+                HAL_PIXEL_FORMAT_YCrCb_NV12,dst_fd,
                 vframe.FrameWidth, vframe.FrameHeight, 
                 100, false, true,
                 false, true, true);
@@ -2745,8 +2746,9 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
                     ALOGV("%s(%d) halbuf_wxh(%dx%d) frameNumber(%d)", __FUNCTION__, __LINE__,
                         halBuf.width, halBuf.height, req->frameNumber);
                     unsigned long vir_addr =  reinterpret_cast<unsigned long>(req->inData);
-                    camera2::RgaCropScale::rga_nv12_scale_crop(
-                        tempFrameWidth, tempFrameHeight, vir_addr, handle_fd,
+                    camera2::RgaCropScale::rga_scale_crop(
+                        tempFrameWidth, tempFrameHeight, vir_addr,
+                        HAL_PIXEL_FORMAT_YCrCb_NV12,handle_fd,
                         halBuf.width, halBuf.height, 100, false, true,
                         (halBuf.format == PixelFormat::YCRCB_420_SP), is16Align,
                         true);
@@ -2763,8 +2765,9 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
                         halBuf.width, halBuf.height, req->frameNumber);
                     unsigned long vir_addr =  reinterpret_cast<unsigned long>(req->inData);
                     ALOGE("inDataSize:%d",req->inDataSize);
-                    camera2::RgaCropScale::rga_nv16_nv12_scale_crop(
-                        tempFrameWidth, tempFrameHeight, vir_addr, handle_fd,
+                    camera2::RgaCropScale::rga_scale_crop(
+                        tempFrameWidth, tempFrameHeight, vir_addr,
+                        RK_FORMAT_YCbCr_422_SP, handle_fd,
                         halBuf.width, halBuf.height, 100, false, true,
                         (halBuf.format == PixelFormat::YCRCB_420_SP), is16Align,
                         true);
@@ -2780,8 +2783,8 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
                     ALOGV("%s(%d) halbuf_wxh(%dx%d) frameNumber(%d)", __FUNCTION__, __LINE__,
                         halBuf.width, halBuf.height, req->frameNumber);
                     unsigned long vir_addr =  reinterpret_cast<unsigned long>(req->inData);
-                    camera2::RgaCropScale::rga_rgb_nv12_scale_crop(
-                        tempFrameWidth, tempFrameHeight, vir_addr, handle_fd,
+                    camera2::RgaCropScale::rga_scale_crop(
+                        tempFrameWidth, tempFrameHeight, vir_addr,0x7 << 8, handle_fd,
                         halBuf.width, halBuf.height, 100, false, true,
                         (halBuf.format == PixelFormat::YCRCB_420_SP), is16Align,
                         true);
@@ -2798,8 +2801,9 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
                     ALOGV("%s(%d) halbuf_wxh(%dx%d) frameNumber(%d)", __FUNCTION__, __LINE__,
                         halBuf.width, halBuf.height, req->frameNumber);
                     unsigned long vir_addr =  reinterpret_cast<unsigned long>(req->mVirAddr);
-                    camera2::RgaCropScale::rga_nv12_scale_crop(
-                        tempFrameWidth, tempFrameHeight, vir_addr, handle_fd,
+                    camera2::RgaCropScale::rga_scale_crop(
+                        tempFrameWidth, tempFrameHeight, vir_addr,
+                        HAL_PIXEL_FORMAT_YCrCb_NV12, handle_fd,
                         halBuf.width, halBuf.height, 100, false, true,
                         (halBuf.format == PixelFormat::YCRCB_420_SP), is16Align,
                         true);
@@ -2870,7 +2874,7 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
                         LOGE("convert tmp_hand to dst_fd error");
                         return -EINVAL;
                     }
-                    ALOGV("%s(%d): halBuf handle_fd(%d)", __FUNCTION__, __LINE__, handle_fd);
+                    //ALOGV("%s(%d): halBuf handle_fd(%d)", __FUNCTION__, __LINE__, handle_fd);
                     ALOGV("%s(%d) halbuf_wxh(%dx%d) frameNumber(%d)", __FUNCTION__, __LINE__,
                         halBuf.width, halBuf.height, req->frameNumber);
 
@@ -2904,8 +2908,9 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
                     }
                     isJpegNeedCropScale = false;
                 } else {
-                    camera2::RgaCropScale::rga_nv12_scale_crop(
-                        tempFrameWidth, tempFrameHeight, req->mShareFd, handle_fd,
+                    camera2::RgaCropScale::rga_scale_crop(
+                        tempFrameWidth, tempFrameHeight, req->mShareFd,
+                        HAL_PIXEL_FORMAT_YCrCb_NV12, handle_fd,
                         halBuf.width, halBuf.height, 100, false, true,
                         (halBuf.format == PixelFormat::YCRCB_420_SP), is16Align,
                         req->frameIn->mFourcc == V4L2_PIX_FMT_YUYV);
