@@ -63,6 +63,9 @@ char android::hardware::camera::device::V3_4::implementation::ExternalCameraDevi
 
 const std::regex kDevicePathRE("/dev/video([0-9]+)");
 
+std::map<int,std::vector<SupportedV4L2Format>> HORIZONTAL_format;
+std::map<int,std::vector<SupportedV4L2Format>> VERTICAL_format;
+
 ExternalCameraDevice::ExternalCameraDevice(
         const std::string& devicePath, const ExternalCameraConfig& cfg) :
         mCameraId("-1"),
@@ -71,6 +74,11 @@ ExternalCameraDevice::ExternalCameraDevice(
     std::smatch sm;
     if (std::regex_match(mDevicePath, sm, kDevicePathRE)) {
         mCameraId = std::to_string(mCfg.cameraIdOffset + std::stoi(sm[1]));
+#ifdef SUBDEVICE_ENABLE
+         if(std::stoi(mCameraId.c_str())>SUBDEVICE_OFFSET){
+             mSubDevice = true;
+         }
+#endif
     } else {
         ALOGE("%s: device path match failed for %s", __FUNCTION__, mDevicePath.c_str());
     }
@@ -172,6 +180,28 @@ Return<void> ExternalCameraDevice::open(
     }
 
     unique_fd fd(::open(mDevicePath.c_str(), O_RDWR));
+#ifdef SUBDEVICE_ENABLE
+    if(!mSubDevice){
+        if (fd.get() < 0) {
+            int numAttempt = 0;
+            do {
+                ALOGW("%s: v4l2 device %s open failed, wait 33ms and try again",
+                        __FUNCTION__, mDevicePath.c_str());
+                usleep(OPEN_RETRY_SLEEP_US); // sleep and try again
+                fd.reset(::open(mDevicePath.c_str(), O_RDWR));
+                numAttempt++;
+            } while (fd.get() < 0 && numAttempt <= MAX_RETRY);
+
+            if (fd.get() < 0) {
+                ALOGE("%s: v4l2 device open %s failed: %s",
+                        __FUNCTION__, mDevicePath.c_str(), strerror(errno));
+                mLock.unlock();
+                _hidl_cb(Status::INTERNAL_ERROR, nullptr);
+                return Void();
+            }
+        }
+    }
+#else
     if (fd.get() < 0) {
         int numAttempt = 0;
         do {
@@ -190,7 +220,7 @@ Return<void> ExternalCameraDevice::open(
             return Void();
         }
     }
-
+#endif
     session = createSession(
             callback, mCfg, mSupportedFormats, mCroppingType,
             mCameraCharacteristics, mCameraId, std::move(fd));
@@ -246,11 +276,19 @@ status_t ExternalCameraDevice::initCameraCharacteristics() {
     if (mCameraCharacteristics.isEmpty()) {
         // init camera characteristics
         unique_fd fd(::open(mDevicePath.c_str(), O_RDWR));
+#ifdef SUBDEVICE_ENABLE
+        if(!mSubDevice){
+            if (fd.get() < 0) {
+                ALOGE("%s: v4l2 device open %s failed", __FUNCTION__, mDevicePath.c_str());
+                return DEAD_OBJECT;
+            }
+        }
+#else
         if (fd.get() < 0) {
             ALOGE("%s: v4l2 device open %s failed", __FUNCTION__, mDevicePath.c_str());
             return DEAD_OBJECT;
         }
-
+#endif
         status_t ret;
         ret = initDefaultCharsKeys(&mCameraCharacteristics);
         if (ret != OK) {
@@ -949,7 +987,7 @@ std::vector<SupportedV4L2Format> ExternalCameraDevice::getCandidateSupportedForm
     const Size& minStreamSize,
     bool depthEnabled) {
     std::vector<SupportedV4L2Format> outFmts;
-
+if (!mSubDevice){
     // VIDIOC_QUERYCAP get Capability
     struct v4l2_capability capability;
     int ret_query = ioctl(fd, VIDIOC_QUERYCAP, &capability);
@@ -1062,6 +1100,33 @@ std::vector<SupportedV4L2Format> ExternalCameraDevice::getCandidateSupportedForm
         fmtdesc.index++;
     }
     trimSupportedFormats(cropType, &outFmts);
+
+}
+#ifdef SUBDEVICE_ENABLE
+    if(outFmts.size()>0){
+        std::vector<SupportedV4L2Format> formats;
+        formats.assign(outFmts.begin(), outFmts.end());
+        if(cropType == HORIZONTAL){
+            HORIZONTAL_format.clear();
+            HORIZONTAL_format[std::stoi(mCameraId.c_str())] = formats;
+        }else if (cropType == VERTICAL)
+        {
+            VERTICAL_format.clear();
+            VERTICAL_format[std::stoi(mCameraId.c_str())] = formats;
+        }
+    }
+
+    if(mSubDevice){
+        int subId = std::stoi(mCameraId.c_str()) - 100;
+        if(cropType == HORIZONTAL){
+            outFmts.assign(HORIZONTAL_format[subId].begin(),HORIZONTAL_format[subId].end());
+        }else if (cropType == VERTICAL)
+        {
+            outFmts.assign(VERTICAL_format[subId].begin(),VERTICAL_format[subId].end());
+        }
+    }
+    ALOGD("@%s,cropType:%d,mCameraId:%s,outFmts.size:%d",__FUNCTION__,cropType,mCameraId.c_str(),outFmts.size());
+#endif
     return outFmts;
 }
 

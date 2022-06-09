@@ -55,14 +55,22 @@ cc_library_shared {
 	"DeviceV4L2Event.cpp",
     ],
     product_variables: {
-	cameraSupportHDMI: {
-	    cppflags:[
-		"-DHDMI_ENABLE",
-	    ],
-	    cflags:[
-		"-DHDMI_ENABLE",
-	    ]
-	}
+        cameraSupportHDMI: {
+            cppflags:[
+            "-DHDMI_ENABLE",
+            ],
+            cflags:[
+            "-DHDMI_ENABLE",
+            ]
+        },
+        cameraSupportSubDevice: {
+            cppflags:[
+            "-DSUBDEVICE_ENABLE",
+            ],
+            cflags:[
+            "-DSUBDEVICE_ENABLE",
+            ]
+        }
     },
     shared_libs: [
         "android.hardware.camera.common@1.0",

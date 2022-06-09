@@ -264,6 +264,16 @@ const int ExternalCameraDeviceSession::kMaxProcessedStream;
 const int ExternalCameraDeviceSession::kMaxStallStream;
 HandleImporter ExternalCameraDeviceSession::sHandleImporter;
 
+std::mutex ExternalCameraDeviceSession::sSubDeviceBufferLock;
+std::condition_variable ExternalCameraDeviceSession::sSubDeviceBufferPushed;
+
+uint8_t* SubDeviceInData = NULL;
+size_t SubDeviceInDataSize = 0;
+
+SupportedV4L2Format sSubDeviceV4l2Fmt {.width = 0, .height = 0};
+double sSubDeviceV4l2StreamingFps = 0.0;
+int sSubDeviceV4L2BufferCount = 0;
+
 ExternalCameraDeviceSession::ExternalCameraDeviceSession(
         const sp<ICameraDeviceCallback>& callback,
         const ExternalCameraConfig& cfg,
@@ -280,7 +290,14 @@ ExternalCameraDeviceSession::ExternalCameraDeviceSession(
         mCameraId(cameraId),
         mV4l2Fd(std::move(v4l2Fd)),
         mMaxThumbResolution(getMaxThumbResolution()),
-        mMaxJpegResolution(getMaxJpegResolution()) {}
+        mMaxJpegResolution(getMaxJpegResolution()) {
+#ifdef SUBDEVICE_ENABLE
+        if(std::stoi(mCameraId.c_str())>SUBDEVICE_OFFSET){
+             mSubDevice = true;
+        }
+        ALOGD("@%s,mCameraId:%s,mSubDevice:%d",__FUNCTION__,mCameraId.c_str(),mSubDevice);
+#endif
+        }
 
 void ExternalCameraDeviceSession::createPreviewBuffer() {
     struct bufferinfo_s mGrallocBuf;
@@ -302,13 +319,28 @@ void ExternalCameraDeviceSession::createPreviewBuffer() {
 }
 
 bool ExternalCameraDeviceSession::initialize() {
+#ifdef SUBDEVICE_ENABLE
+    if(!isSubDevice()){
+        if (mV4l2Fd.get() < 0) {
+            ALOGE("%s: invalid v4l2 device fd %d!", __FUNCTION__, mV4l2Fd.get());
+            return true;
+        }
+    }
+#else
     if (mV4l2Fd.get() < 0) {
         ALOGE("%s: invalid v4l2 device fd %d!", __FUNCTION__, mV4l2Fd.get());
         return true;
     }
-
+#endif
     struct v4l2_capability capability;
+#ifdef SUBDEVICE_ENABLE
+    int ret = -1;
+    if(!isSubDevice()){
+        ioctl(mV4l2Fd.get(), VIDIOC_QUERYCAP, &capability);
+    }
+#else
     int ret = ioctl(mV4l2Fd.get(), VIDIOC_QUERYCAP, &capability);
+#endif
     std::string make, model;
     if (ret < 0) {
         ALOGW("%s v4l2 QUERYCAP failed", __FUNCTION__);
@@ -1730,9 +1762,17 @@ bool ExternalCameraDeviceSession::FormatConvertThread::threadLoop() {
          return true;
     }
     debugShowFPS();
+#ifdef SUBDEVICE_ENABLE
+    if(!mFmtOutputThread->isSubDevice()){
+        if (req->frameIn->getData(&inData, &inDataSize) != 0) {
+            LOGE("%s(%d)getData failed!\n", __FUNCTION__, __LINE__);
+        }
+    }
+#else
     if (req->frameIn->getData(&inData, &inDataSize) != 0) {
          LOGE("%s(%d)getData failed!\n", __FUNCTION__, __LINE__);
     }
+#endif
 
     mShareFd = mCamMemManager->getBufferAddr(
             PREVIEWBUFFER, req->frameIn->mBufferIndex, buffer_sharre_fd);
@@ -1743,9 +1783,31 @@ bool ExternalCameraDeviceSession::FormatConvertThread::threadLoop() {
 
     int tmpW = (req->frameIn->mWidth + 15) & (~15);
     int tmpH = (req->frameIn->mHeight + 15) & (~15);
+#ifdef SUBDEVICE_ENABLE
+    if(!mFmtOutputThread->isSubDevice()){
+        ALOGV("%s,MainDevice mBufferIndex %d",__FUNCTION__,req->frameIn->mBufferIndex);
+        {
+            std::lock_guard<std::mutex> lk(sSubDeviceBufferLock);
+            ALOGE("MainDevice inDataSize:%d",inDataSize);
+            if(SubDeviceInData == NULL){
+                SubDeviceInData = (uint8_t*) malloc(req->frameIn->mWidth*req->frameIn->mHeight*4);
+            }
+            memcpy((void*)SubDeviceInData,(void*)inData,inDataSize);
+            SubDeviceInDataSize = inDataSize;
+            ALOGV("%s,MainDevice push",__FUNCTION__);
+            sSubDeviceBufferPushed.notify_one();
+        }
+    }
+    if (mFmtOutputThread->isSubDevice())
+    {
+        inData = SubDeviceInData;
+        inDataSize = SubDeviceInDataSize;
+    }
+#endif
 
     if (req->frameIn->mFourcc == V4L2_PIX_FMT_MJPEG) {
 #ifdef RK_HW_JPEG_DECODER
+
         int ret = jpegDecoder(mShareFd, inData, inDataSize);
         if(!ret) {
             LOGE("mjpeg decode failed");
@@ -2155,6 +2217,11 @@ ssize_t ExternalCameraDeviceSession::getJpegBufferSize(
     }
 
     return jpegBufferSize;
+}
+
+
+bool ExternalCameraDeviceSession::isSubDevice() const {
+    return mSubDevice;
 }
 
 int ExternalCameraDeviceSession::OutputThread::createJpegLocked(
@@ -2743,7 +2810,6 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
         lk.unlock();
         return onDeviceError("%s: failed to process buffer request error!", __FUNCTION__);
     }
-    
     ALOGV("%s processing new request", __FUNCTION__);
     const int kSyncWaitTimeoutMs = 500;
     for (auto& halBuf : req->buffers) {
@@ -3441,7 +3507,33 @@ int ExternalCameraDeviceSession::v4l2StreamOffLocked() {
         }
     }
     mV4L2BufferCount = 0;
+#ifdef SUBDEVICE_ENABLE
+    if(!isSubDevice()){
+	    // VIDIOC_STREAMOFF
+	    v4l2_buf_type capture_type;
+	    if (mCapability.device_caps & V4L2_CAP_VIDEO_CAPTURE_MPLANE)
+	        capture_type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	    else
+	        capture_type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	    if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_STREAMOFF, &capture_type)) < 0) {
+	        ALOGE("%s: STREAMOFF failed: %s", __FUNCTION__, strerror(errno));
+	        return -errno;
+	    }
 
+	    // VIDIOC_REQBUFS: clear buffers
+	    v4l2_requestbuffers req_buffers{};
+	    if (mCapability.device_caps & V4L2_CAP_VIDEO_CAPTURE_MPLANE)
+	        req_buffers.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+	    else
+	        req_buffers.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	    req_buffers.memory = V4L2_MEMORY_MMAP;
+	    req_buffers.count = 0;
+	    if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_REQBUFS, &req_buffers)) < 0) {
+	        ALOGE("%s: REQBUFS failed: %s", __FUNCTION__, strerror(errno));
+	        return -errno;
+	    }
+    }
+#else
     // VIDIOC_STREAMOFF
     v4l2_buf_type capture_type;
     if (mCapability.device_caps & V4L2_CAP_VIDEO_CAPTURE_MPLANE)
@@ -3464,8 +3556,9 @@ int ExternalCameraDeviceSession::v4l2StreamOffLocked() {
     if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_REQBUFS, &req_buffers)) < 0) {
         ALOGE("%s: REQBUFS failed: %s", __FUNCTION__, strerror(errno));
         return -errno;
-    }
+        }
 
+#endif
     mV4l2Streaming = false;
     return OK;
 }
@@ -3523,18 +3616,32 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
         (v4l2Fmt.fourcc >> 16) & 0xFF,
         (v4l2Fmt.fourcc >> 24) & 0xFF,
         v4l2Fmt.width, v4l2Fmt.height);
-
+#ifdef SUBDEVICE_ENABLE
+   if(!isSubDevice()){
+        // VIDIOC_QUERYCAP get Capability
+        int ret_query = ioctl(mV4l2Fd.get(), VIDIOC_QUERYCAP, &mCapability);
+        if (ret_query < 0) {
+            ALOGE("%s v4l2 QUERYCAP %s failed: %s", __FUNCTION__, strerror(errno));
+        }
+    }
+#else
     // VIDIOC_QUERYCAP get Capability
     int ret_query = ioctl(mV4l2Fd.get(), VIDIOC_QUERYCAP, &mCapability);
     if (ret_query < 0) {
         ALOGE("%s v4l2 QUERYCAP %s failed: %s", __FUNCTION__, strerror(errno));
-    }
 
+    }
+#endif
     int ret = v4l2StreamOffLocked();
     if (ret != OK) {
         ALOGE("%s: stop v4l2 streaming failed: ret %d", __FUNCTION__, ret);
         return ret;
     }
+
+    if(isSubDevice()){
+        mV4l2StreamingFps = sSubDeviceV4l2StreamingFps;
+        mV4L2BufferCount = sSubDeviceV4L2BufferCount;
+    }else{
     // VIDIOC_S_FMT w/h/fmt
     v4l2_format fmt;
     if (mCapability.device_caps & V4L2_CAP_VIDEO_CAPTURE_MPLANE)
@@ -3618,6 +3725,13 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
 //    }
     mV4l2StreamingFps = fps;
 
+#ifdef SUBDEVICE_ENABLE
+    if (!isSubDevice())
+    {
+        sSubDeviceV4l2StreamingFps = mV4l2StreamingFps;
+    }
+#endif
+
     uint32_t v4lBufferCount = (fps >= kDefaultFps) ?
             mCfg.numVideoBuffers : mCfg.numStillBuffers;
     // VIDIOC_REQBUFS: create buffers
@@ -3643,6 +3757,12 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
     // VIDIOC_QUERYBUF:  get buffer offset in the V4L2 fd
     // VIDIOC_QBUF: send buffer to driver
     mV4L2BufferCount = req_buffers.count;
+#ifdef SUBDEVICE_ENABLE
+    if (!isSubDevice())
+    {
+        sSubDeviceV4L2BufferCount = mV4L2BufferCount;
+    }
+#endif
     for (uint32_t i = 0; i < req_buffers.count; i++) {
         v4l2_buffer buffer;
         buffer.index = i;
@@ -3722,8 +3842,11 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
         isNeedCheckIFrame = true;
     }
 
+    }
+
+
     ALOGI("%s: start V4L2 streaming %dx%d@%ffps",
-                __FUNCTION__, v4l2Fmt.width, v4l2Fmt.height, fps);
+                __FUNCTION__, v4l2Fmt.width, v4l2Fmt.height, mV4l2StreamingFps);
     mV4l2StreamingFmt = v4l2Fmt;
     mV4l2Streaming = true;
     return OK;
@@ -3750,6 +3873,33 @@ sp<V4L2Frame> ExternalCameraDeviceSession::dequeueV4l2FrameLocked(/*out*/nsecs_t
 
     ATRACE_BEGIN("VIDIOC_DQBUF");
     v4l2_buffer buffer{};
+#ifdef SUBDEVICE_ENABLE
+    if(!isSubDevice()){
+        if (mCapability.device_caps & V4L2_CAP_VIDEO_CAPTURE_MPLANE)
+            buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+        else
+            buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        buffer.memory = V4L2_MEMORY_MMAP;
+        if (V4L2_TYPE_IS_MULTIPLANAR(buffer.type)) {
+            buffer.m.planes = planes;
+            buffer.length = PLANES_NUM;
+        }
+
+        if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_DQBUF, &buffer)) < 0) {
+            ALOGE("%s: DQBUF fails: %s", __FUNCTION__, strerror(errno));
+            return ret;
+        }
+    }
+    if(isSubDevice()){
+        std::unique_lock<std::mutex> lk(sSubDeviceBufferLock);
+        std::chrono::seconds timeout = std::chrono::seconds(kBufferWaitTimeoutSec);
+        auto st = sSubDeviceBufferPushed.wait_for(lk, timeout);
+        if (st == std::cv_status::timeout) {
+            ALOGE("wait mSubDeviceBufferPushed timeout");
+        }
+        ALOGV("%s,SubDevice get buffer",__FUNCTION__);
+    }
+#else
     if (mCapability.device_caps & V4L2_CAP_VIDEO_CAPTURE_MPLANE)
         buffer.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
     else
@@ -3764,6 +3914,7 @@ sp<V4L2Frame> ExternalCameraDeviceSession::dequeueV4l2FrameLocked(/*out*/nsecs_t
         ALOGE("%s: DQBUF fails: %s", __FUNCTION__, strerror(errno));
         return ret;
     }
+#endif
     ATRACE_END();
 
     if (buffer.index >= mV4L2BufferCount) {
@@ -3827,11 +3978,21 @@ void ExternalCameraDeviceSession::enqueueV4l2Frame(const sp<V4L2Frame>& frame) {
     }
 
     buffer.index = frame->mBufferIndex;
+#ifdef SUBDEVICE_ENABLE
+    if(!isSubDevice()){
+        if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_QBUF, &buffer)) < 0) {
+            ALOGE("%s: QBUF index %d fails: %s", __FUNCTION__,
+                    frame->mBufferIndex, strerror(errno));
+            return;
+        }
+    }
+#else
     if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_QBUF, &buffer)) < 0) {
         ALOGE("%s: QBUF index %d fails: %s", __FUNCTION__,
                 frame->mBufferIndex, strerror(errno));
         return;
     }
+#endif
     ATRACE_END();
 
     {
@@ -4015,11 +4176,13 @@ Status ExternalCameraDeviceSession::configureStreams(
 #ifdef HDMI_ENABLE
     sp<rockchip::hardware::hdmi::V1_0::IHdmi> client = rockchip::hardware::hdmi::V1_0::IHdmi::getService();
     if(client.get()!= nullptr){
+        static int hdmiFourcc = 0;
         ::android::hardware::hidl_string deviceId;
         client->getHdmiDeviceId( [&](const ::android::hardware::hidl_string &id){
                 deviceId = id.c_str();
         });
-        ALOGE("getHdmiDeviceId:%s",deviceId.c_str());
+        ALOGE("getHdmiDeviceId:%s,mCameraId:%s,diff :%d",deviceId.c_str(),mCameraId.c_str(),
+        std::stoi(mCameraId.c_str()) - std::stoi(deviceId.c_str()));
         if(strstr(deviceId.c_str(), mCameraId.c_str())){
                 int width,height,format;
                 get_current_sourcesize(mV4l2Fd.get(),width,height,format);
@@ -4030,8 +4193,20 @@ Status ExternalCameraDeviceSession::configureStreams(
                 (format >> 24) & 0xFF);
             ALOGE("formatsource:%s",formatsource);
             v4l2Fmt.fourcc = format;
+            hdmiFourcc = format;
         }
+#ifdef SUBDEVICE_ENABLE
+        else if (strlen(deviceId.c_str())>0 && hdmiFourcc != 0 &&
+            std::stoi(mCameraId.c_str()) - std::stoi(deviceId.c_str()) == 100){
+            v4l2Fmt.fourcc= hdmiFourcc;
+        }
+#endif
      }
+#endif
+#ifdef SUBDEVICE_ENABLE
+    if(isSubDevice()){
+        v4l2Fmt = sSubDeviceV4l2Fmt;
+    }
 #endif
     if (v4l2Fmt.width == 0) {
         // Cannot find exact good aspect ratio candidate, try to find a close one
@@ -4064,7 +4239,13 @@ Status ExternalCameraDeviceSession::configureStreams(
             v4l2Fmt.width, v4l2Fmt.height);
         return Status::INTERNAL_ERROR;
     }
-
+#ifdef SUBDEVICE_ENABLE
+    ALOGD("isSubDevice():%d,v4l2Fmt.width:%d,v4l2Fmt.height:%d",isSubDevice(),v4l2Fmt.width,v4l2Fmt.height);
+    if (!isSubDevice())
+    {
+        sSubDeviceV4l2Fmt = v4l2Fmt;
+    }
+#endif
     createPreviewBuffer();
 
     Size v4lSize = {v4l2Fmt.width, v4l2Fmt.height};

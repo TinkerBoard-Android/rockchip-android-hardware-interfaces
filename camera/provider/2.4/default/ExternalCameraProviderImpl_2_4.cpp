@@ -188,6 +188,31 @@ Return<void> ExternalCameraProviderImpl_2_4::getCameraDeviceInterface_V3_x(
     }
 
     if (std::atoi(cameraDevicePath.c_str() + kDevicePrefixLen) >= 100) {
+#ifdef SUBDEVICE_ENABLE
+        if(std::atoi(cameraDevicePath.c_str() + kDevicePrefixLen) == 118||std::atoi(cameraDevicePath.c_str() + kDevicePrefixLen) == 117){
+            ALOGV("Constructing v3.4 external sub camera device");
+            sp<device::V3_4::implementation::ExternalCameraDevice> deviceImpl =
+                new device::V3_4::implementation::ExternalCameraDevice(
+                        cameraDevicePath, mCfg);
+            if (deviceImpl == nullptr || deviceImpl->isInitFailed()) {
+                ALOGE("%s: camera device %s init failed!", __FUNCTION__, cameraDevicePath.c_str());
+                _hidl_cb(Status::INTERNAL_ERROR, nullptr);
+                return Void();
+            }
+
+            IF_ALOGV() {
+                deviceImpl->getInterface()->interfaceChain([](
+                    ::android::hardware::hidl_vec<::android::hardware::hidl_string> interfaceChain) {
+                        ALOGV("Device interface chain:");
+                        for (auto iface : interfaceChain) {
+                            ALOGV("  %s", iface.c_str());
+                        }
+                    });
+            }
+
+            _hidl_cb (Status::OK, deviceImpl->getInterface());
+        }
+#else
         ALOGV("Constructing v3.4 external fake camera device");
         sp<device::V3_4::implementation::ExternalFakeCameraDevice> deviceImpl = 
             new device::V3_4::implementation::ExternalFakeCameraDevice(
@@ -209,6 +234,7 @@ Return<void> ExternalCameraProviderImpl_2_4::getCameraDeviceInterface_V3_x(
         }
     
         _hidl_cb (Status::OK, deviceImpl->getInterface());
+#endif
     } else {
  
     sp<device::V3_4::implementation::ExternalCameraDevice> deviceImpl;
@@ -260,6 +286,7 @@ Return<void> ExternalCameraProviderImpl_2_4::getCameraDeviceInterface_V3_x(
 
 void ExternalCameraProviderImpl_2_4::addExternalCamera(const char* devName) {
     ALOGI("ExtCam: adding %s to External Camera HAL!", devName);
+    {
     Mutex::Autolock _l(mLock);
     std::string deviceName;
     std::string cameraId = std::to_string(mCfg.cameraIdOffset +
@@ -275,11 +302,32 @@ void ExternalCameraProviderImpl_2_4::addExternalCamera(const char* devName) {
     if (mCallbacks != nullptr) {
         mCallbacks->cameraDeviceStatusChange(deviceName, CameraDeviceStatus::PRESENT);
     }
+    }
+#ifdef SUBDEVICE_ENABLE
+    if(std::atoi(devName + kDevicePrefixLen)<100){
+        std::string cameraId = std::to_string(mCfg.cameraIdOffset +
+                                          std::atoi(devName + kDevicePrefixLen));
+         //addSubCamera
+        std::string subDevName = (std::string("/dev/video")+cameraId);
+        deviceAdded(subDevName.c_str());
+    }
+#endif
 }
 
 void ExternalCameraProviderImpl_2_4::deviceAdded(const char* devName) {
     if (std::atoi(devName + kDevicePrefixLen) >= 100)
     {
+#ifdef SUBDEVICE_ENABLE
+        if(std::atoi(devName + kDevicePrefixLen) ==118||std::atoi(devName + kDevicePrefixLen) ==117){
+            sp<device::V3_4::implementation::ExternalCameraDevice> deviceImpl =
+            new device::V3_4::implementation::ExternalCameraDevice(devName, mCfg);
+            if (deviceImpl == nullptr || deviceImpl->isInitFailed()) {
+                ALOGW("%s: Attempt to init camera device %s failed!", __FUNCTION__, devName);
+                return;
+            }
+            deviceImpl.clear();
+        }
+#else
         sp<device::V3_4::implementation::ExternalFakeCameraDevice> deviceImpl =
             new device::V3_4::implementation::ExternalFakeCameraDevice(devName, mCfg);
         if (deviceImpl == nullptr || deviceImpl->isInitFailed()) {
@@ -287,6 +335,7 @@ void ExternalCameraProviderImpl_2_4::deviceAdded(const char* devName) {
             return;
         }
         deviceImpl.clear();
+#endif
     } else {
     {
         base::unique_fd fd(::open(devName, O_RDWR));
@@ -322,7 +371,7 @@ void ExternalCameraProviderImpl_2_4::deviceAdded(const char* devName) {
 }
 
 void ExternalCameraProviderImpl_2_4::deviceRemoved(const char* devName) {
-    Mutex::Autolock _l(mLock);
+    {Mutex::Autolock _l(mLock);
     std::string deviceName;
     std::string cameraId = std::to_string(mCfg.cameraIdOffset +
                                           std::atoi(devName + kDevicePrefixLen));
@@ -341,6 +390,18 @@ void ExternalCameraProviderImpl_2_4::deviceRemoved(const char* devName) {
     } else {
         ALOGE("%s: cannot find camera device %s", __FUNCTION__, devName);
     }
+    }
+#ifdef SUBDEVICE_ENABLE
+    std::string cameraId = std::to_string(SUBDEVICE_OFFSET +
+                                          std::atoi(devName + kDevicePrefixLen));
+    if(std::atoi(cameraId.c_str()) > SUBDEVICE_OFFSET && std::atoi(cameraId.c_str()) < SUBDEVICE_OFFSET + 100){
+        cameraId = std::to_string(mCfg.cameraIdOffset +
+                                          std::atoi(devName + kDevicePrefixLen));
+                                          ALOGD("@%s,cameraId:%s",__FUNCTION__,cameraId.c_str());
+        std::string deviceName = std::string("/dev/video") + cameraId;
+        deviceRemoved(deviceName.c_str());
+    }
+#endif
 }
 
 ExternalCameraProviderImpl_2_4::HotplugThread::HotplugThread(
