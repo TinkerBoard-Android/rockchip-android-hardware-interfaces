@@ -116,7 +116,6 @@ struct ExternalCameraDeviceSession : public virtual RefBase,
     static const int kMaxStallStream = 1;
     static const uint32_t kMaxBytesPerPixel = 2;
 	void createPreviewBuffer();
-
     class OutputThread : public android::Thread {
     public:
         OutputThread(wp<OutputThreadInterface> parent, CroppingType,
@@ -136,6 +135,11 @@ struct ExternalCameraDeviceSession : public virtual RefBase,
 
         // The remaining request list is returned for offline processing
         std::list<std::shared_ptr<HalRequest>> switchToOffline();
+
+        bool isSubDevice(){
+                auto parent = mParent.promote();
+                return parent->isSubDevice();
+        }
 
     protected:
         // Methods to request output buffer in parallel
@@ -312,6 +316,8 @@ protected:
 
     virtual ssize_t getJpegBufferSize(uint32_t width, uint32_t height) const override;
 
+    virtual bool isSubDevice() const override;
+
     virtual void notifyError(uint32_t frameNumber, int32_t streamId, ErrorCode ec) override;
     // End of OutputThreadInterface methods
 
@@ -398,6 +404,8 @@ protected:
     // Setup in constructor, reset in close() after OutputThread is joined
     unique_fd mV4l2Fd;
 
+    bool mSubDevice = false;
+
     // device is closed either
     //    - closed by user
     //    - init failed
@@ -423,6 +431,8 @@ protected:
     size_t mNumDequeuedV4l2Buffers = 0;
     uint32_t mMaxV4L2BufferSize = 0;
 
+    static std::mutex sSubDeviceBufferLock;
+    static std::condition_variable sSubDeviceBufferPushed;
     // Not protected by mLock (but might be used when mLock is locked)
     sp<OutputThread> mOutputThread;
     sp<FormatConvertThread> mFormatConvertThread;

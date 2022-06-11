@@ -191,6 +191,14 @@ cc_library_shared {
             cflags:[
             "-DOSD_ENABLE",
             ]
+        },
+        cameraSupportSubDevice: {
+            cppflags:[
+            "-DSUBDEVICE_ENABLE",
+            ],
+            cflags:[
+            "-DSUBDEVICE_ENABLE",
+            ]
         }
     },
     local_include_dirs: [

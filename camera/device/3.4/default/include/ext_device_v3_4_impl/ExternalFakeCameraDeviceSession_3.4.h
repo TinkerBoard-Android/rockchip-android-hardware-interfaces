@@ -136,6 +136,11 @@ struct ExternalFakeCameraDeviceSession : public virtual RefBase,
         // The remaining request list is returned for offline processing
         std::list<std::shared_ptr<HalRequest>> switchToOffline();
 
+        bool isSubDevice(){
+                auto parent = mParent.promote();
+                return parent->isSubDevice();
+        }
+
     protected:
         // Methods to request output buffer in parallel
         // No-op for device@3.4. Implemented in device@3.5
@@ -274,6 +279,8 @@ protected:
         /*out*/std::vector<CaptureResult>* results = nullptr) override;
 
     virtual ssize_t getJpegBufferSize(uint32_t width, uint32_t height) const override;
+
+    virtual bool isSubDevice() const override;
 
     virtual void notifyError(uint32_t frameNumber, int32_t streamId, ErrorCode ec) override;
     // End of OutputThreadInterface methods

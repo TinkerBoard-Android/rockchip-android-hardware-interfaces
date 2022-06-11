@@ -1517,6 +1517,10 @@ ssize_t ExternalFakeCameraDeviceSession::getJpegBufferSize(
     return jpegBufferSize;
 }
 
+bool ExternalFakeCameraDeviceSession::isSubDevice() const {
+    return false;
+}
+
 int ExternalFakeCameraDeviceSession::OutputThread::createJpegLocked(
         HalStreamBuffer &halBuf,
         const common::V1_0::helper::CameraMetadata& setting)

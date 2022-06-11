@@ -296,6 +296,8 @@ struct OutputThreadInterface : public virtual RefBase {
             std::shared_ptr<HalRequest>&) = 0;
 
     virtual ssize_t getJpegBufferSize(uint32_t width, uint32_t height) const = 0;
+
+    virtual bool isSubDevice() const = 0;
 };
 
 }  // namespace implementation

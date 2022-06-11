@@ -27,6 +27,10 @@
 
 #include <vector>
 
+#ifdef SUBDEVICE_ENABLE
+#define SUBDEVICE_OFFSET 200
+#endif
+
 namespace android {
 namespace hardware {
 namespace camera {
@@ -137,7 +141,7 @@ protected:
             std::vector<SupportedV4L2Format>& outFmts);
 
     // Get candidate supported formats list of input cropping type.
-    static std::vector<SupportedV4L2Format> getCandidateSupportedFormatsLocked(
+    std::vector<SupportedV4L2Format> getCandidateSupportedFormatsLocked(
             int fd, CroppingType cropType,
             const std::vector<ExternalCameraConfig::FpsLimitation>& fpsLimits,
             const std::vector<ExternalCameraConfig::FpsLimitation>& depthFpsLimits,
@@ -157,6 +161,8 @@ protected:
     CroppingType mCroppingType;
 
     wp<ExternalCameraDeviceSession> mSession = nullptr;
+
+    bool mSubDevice = false;
 
     ::android::hardware::camera::common::V1_0::helper::CameraMetadata mCameraCharacteristics;
 
