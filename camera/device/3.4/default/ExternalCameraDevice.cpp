@@ -48,7 +48,7 @@ namespace {
 // * V4L2_PIX_FMT_YVU420 (== YV12)
 // * V4L2_PIX_FMT_YVYU (YVYU: can be converted to YV12 or other YUV420_888 formats)
 const std::array<uint32_t, /*size*/ 7> kSupportedFourCCs{
-    {V4L2_PIX_FMT_MJPEG,V4L2_PIX_FMT_RGB24 ,V4L2_PIX_FMT_NV12,V4L2_PIX_FMT_NV16 , V4L2_PIX_FMT_H264, V4L2_PIX_FMT_YUYV, V4L2_PIX_FMT_Z16}};  // double braces required in C++11
+    {V4L2_PIX_FMT_MJPEG,V4L2_PIX_FMT_BGR24 ,V4L2_PIX_FMT_NV12,V4L2_PIX_FMT_NV16 , V4L2_PIX_FMT_H264, V4L2_PIX_FMT_YUYV, V4L2_PIX_FMT_Z16}};  // double braces required in C++11
 
 constexpr int MAX_RETRY = 5; // Allow retry v4l2 open failures a few times.
 constexpr int OPEN_RETRY_SLEEP_US = 100000; // 100ms * MAX_RETRY = 0.5 seconds
@@ -348,7 +348,7 @@ status_t ExternalCameraDevice::initAvailableCapabilities(
             case V4L2_PIX_FMT_YUYV: hasColor = true; break;
             case V4L2_PIX_FMT_NV12: hasColor = true; break;
             case V4L2_PIX_FMT_NV16: hasColor = true; break;
-            case V4L2_PIX_FMT_RGB24 : hasColor = true; break;
+            case V4L2_PIX_FMT_BGR24 : hasColor = true; break;
             default: ALOGW("%s: Unsupported format found", __FUNCTION__);
         }
     }
@@ -801,7 +801,7 @@ status_t ExternalCameraDevice::initOutputCharsKeys(
             case V4L2_PIX_FMT_NV16:
                 hasColor_nv12 = true;
                 break;
-            case V4L2_PIX_FMT_RGB24 :
+            case V4L2_PIX_FMT_BGR24 :
                 hasColor_nv12 = true;
                 break;
             default:
