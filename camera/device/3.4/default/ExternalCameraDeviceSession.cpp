@@ -4287,6 +4287,7 @@ Status ExternalCameraDeviceSession::configureStreams(
             GRALLOC_USAGE_HW_VIDEO_ENCODER |
             GRALLOC_USAGE_HW_CAMERA_WRITE |
             RK_GRALLOC_USAGE_SPECIFY_STRIDE|
+            RK_GRALLOC_USAGE_RGA_ACCESS |
             GRALLOC_USAGE_PRIVATE_1;
         out->streams[i].v3_2.consumerUsage = 0;
         out->streams[i].v3_2.maxBuffers  = mV4L2BufferCount;

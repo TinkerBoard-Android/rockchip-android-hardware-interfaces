@@ -526,6 +526,7 @@ static cam_mem_handle_t*  cam_mem_gralloc_ops_init(
     if (mem_flag & CAM_MEM_FLAG_SW_READ)
         handle->flag |= GRALLOC_USAGE_SW_READ_OFTEN;
     handle->flag |= RK_GRALLOC_USAGE_SPECIFY_STRIDE;
+    handle->flag |= RK_GRALLOC_USAGE_RGA_ACCESS;
     return handle;
 init_error:
     if (!handle)

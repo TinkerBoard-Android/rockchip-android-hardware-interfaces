@@ -40,7 +40,7 @@
 #define LOGD(msg,...)       ALOGD("@%s(%d): " msg ,__FUNCTION__,__LINE__,##__VA_ARGS__)
 #define LOGE(msg,...)       ALOGE("@%s(%d): " msg ,__FUNCTION__,__LINE__,##__VA_ARGS__)
 #define PAGE_ALIGN(x)   (((x) + 0xFFF) & (~0xFFF)) // Set as multiple of 4K
-
+#define RK_GRALLOC_USAGE_RGA_ACCESS 1ULL << 56
 #ifdef __cplusplus
 extern "C"
 {
