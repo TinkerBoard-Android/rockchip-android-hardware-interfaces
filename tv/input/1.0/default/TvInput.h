@@ -47,6 +47,7 @@ struct TvInput : public ITvInput {
     TvInput(tv_input_device_t* device);
     ~TvInput();
 
+    Return<Result> privCmdFromApp(const PrivAppCmdInfo& cmdInfo);
     Return<Result> requestCapture(int32_t deviceId, int32_t streamId, uint64_t buffId, const hidl_handle& buffer, int32_t seq)  override;
     Return<void> cancelCapture(int32_t deviceId, int32_t streamId, int32_t seq)  override;
 
