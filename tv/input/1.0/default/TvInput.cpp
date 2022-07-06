@@ -80,6 +80,15 @@ TvInput::~TvInput() {
     }
 }
 
+Return<Result> TvInput::privCmdFromApp(const PrivAppCmdInfo& cmdInfo) {
+    std::map<std::string, std::string> data;
+    for (size_t i = 0; i < cmdInfo.data.size(); i++) {
+        data.insert({cmdInfo.data[i].key, cmdInfo.data[i].value});
+    }
+    mDevice->priv_cmd_from_app(cmdInfo.action.c_str(), data);
+    return Result::OK;
+}
+
 Return<Result> TvInput::requestCapture(int32_t deviceId, int32_t streamId, uint64_t buffId, const hidl_handle& buffer, int32_t seq) {
     mDevice->request_capture(mDevice, deviceId, streamId, buffId, buffer, seq);
     return Result::OK;
@@ -195,7 +204,18 @@ void TvInput::notify(struct tv_input_device* __unused, tv_input_event_t* event,
     if (mCallback != nullptr && event != nullptr) {
         TvInputEvent tvInputEvent;
         tvInputEvent.type = static_cast<TvInputEventType>(event->type);
-        if (event->type >= TV_INPUT_EVENT_CAPTURE_SUCCEEDED) {
+        if (event->type == TV_INPUT_EVENT_PRIV_CMD_TO_APP) {
+            tvInputEvent.deviceInfo.deviceId = event->capture_result.device_id;
+            tvInputEvent.priv_app_cmd.action = event->priv_app_cmd.action;
+            //TODO
+            //tvInputEvent.priv_app_cmd.data.clear();
+            /*for (size_t i = 0; i < event->priv_app_cmd.data.size(); i++) {
+                PrivAppCmdBundle bundle;
+                bundle.key = event->priv_app_cmd.data[i].key;
+                bundle.value = event->priv_app_cmd.data[i].value;
+                tvInputEvent.priv_app_cmd.data.push_back(bundle);
+            }*/
+        } else if (event->type >= TV_INPUT_EVENT_CAPTURE_SUCCEEDED) {
             tvInputEvent.deviceInfo.deviceId = event->capture_result.device_id;
             tvInputEvent.deviceInfo.streamId = event->capture_result.stream_id;
             tvInputEvent.capture_result.buffId = event->capture_result.buff_id;

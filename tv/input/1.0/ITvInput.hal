@@ -19,6 +19,8 @@ package android.hardware.tv.input@1.0;
 import ITvInputCallback;
 
 interface ITvInput {
+    privCmdFromApp(PrivAppCmdInfo cmdInfo) generates (Result result);
+
     /**
      * set display buffer to tvhal
      */

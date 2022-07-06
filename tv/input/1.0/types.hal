@@ -143,6 +143,8 @@ enum TvInputEventType : int32_t {
      * request_capture(), or a request cancellation.
      */
     STREAM_CAPTURE_FAILED = 5,
+
+    PRIV_CMD_TO_APP = 6,
 };
 
 struct TvInputCaptureResult {
@@ -171,6 +173,7 @@ struct TvInputEvent {
      */
     TvInputDeviceInfo deviceInfo;
     TvInputCaptureResult capture_result;
+    PrivAppCmdInfo priv_app_cmd;
 };
 
 struct TvStreamConfig {
@@ -183,6 +186,16 @@ struct TvStreamConfig {
     uint32_t width;
     uint32_t height;
     uint32_t buffCount;
+};
+
+struct PrivAppCmdBundle {
+    string key;
+    string value;
+};
+
+struct PrivAppCmdInfo {
+    string action;
+    vec<PrivAppCmdBundle> data;
 };
 
 struct PreviewBuffer {
