@@ -2,4 +2,4 @@ service vendor.tv-input-1-0 /vendor/bin/hw/android.hardware.tv.input@1.0-service
     interface android.hardware.tv.input@1.0::ITvInput default
     class hal
     user system
-    group system camera
+    group system camera media_rw everybody
