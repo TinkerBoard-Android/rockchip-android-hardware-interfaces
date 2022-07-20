@@ -469,8 +469,8 @@ static v4l2_buf_type TVHAL_V4L2_BUF_TYPE = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 #ifdef HDMI_ENABLE
             sp<rockchip::hardware::hdmi::V1_0::IHdmi> client = rockchip::hardware::hdmi::V1_0::IHdmi::getService();
             if(client.get()!= nullptr){
-                ALOGD("foundHdmiDevice:%s",deviceId.c_str());
-                client->foundHdmiDevice(::android::hardware::hidl_string(std::to_string(100+std::stoi(deviceId.c_str()))));
+                ALOGD("foundHdmiDevice:%s, cameraIdOffset:%d",deviceId.c_str(),mParent->mCfg.cameraIdOffset);
+                client->foundHdmiDevice(::android::hardware::hidl_string(std::to_string(mParent->mCfg.cameraIdOffset+std::stoi(deviceId.c_str()))));
             }
 #endif
             ALOGD("mHinDevHandle::%d ,kV4l2DevicePath:%s ,deviceId:%s",mHinDevHandle,kV4l2DevicePath,deviceId.c_str());
