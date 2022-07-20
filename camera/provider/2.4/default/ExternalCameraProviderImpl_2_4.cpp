@@ -467,10 +467,48 @@ static v4l2_buf_type TVHAL_V4L2_BUF_TYPE = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 		if(!strncmp(kHdmiNodeName, v4l2DeviceDriver, sizeof(kHdmiNodeName)-1)){
 			mHinDevHandle =  videofd;
 #ifdef HDMI_ENABLE
+            class IHdmiRxStatusCallbackImpl:public ::rockchip::hardware::hdmi::V1_0::IHdmiRxStatusCallback{
+                public:
+                IHdmiRxStatusCallbackImpl(int fd):mFd(fd){
+                    ALOGD("@%s,fd:%d",__FUNCTION__,mFd);
+                }
+                Return<void> getHdmiRxStatus(getHdmiRxStatus_cb _hidl_cb){
+                    rockchip::hardware::hdmi::V1_0::HdmiStatus status;
+                    struct v4l2_dv_timings timings;
+                    int err = ioctl(mFd, VIDIOC_SUBDEV_QUERY_DV_TIMINGS, &timings);
+                    if (err < 0) {
+                        ALOGD("get VIDIOC_SUBDEV_QUERY_DV_TIMINGS failed ,%d(%s)", errno, strerror(errno));
+                        _hidl_cb(status);
+                        return Void();
+                    }
+
+                    const struct v4l2_bt_timings *bt =&timings.bt;
+                    double tot_width, tot_height;
+                    tot_height = bt->height +
+                        bt->vfrontporch + bt->vsync + bt->vbackporch +
+                        bt->il_vfrontporch + bt->il_vsync + bt->il_vbackporch;
+                    tot_width = bt->width +
+                        bt->hfrontporch + bt->hsync + bt->hbackporch;
+                    ALOGD("%s:%dx%d, pixelclock:%lld Hz, %.2f fps", __func__,
+                    timings.bt.width, timings.bt.height,
+                    timings.bt.pixelclock,static_cast<double>(bt->pixelclock) /(tot_width * tot_height));
+                    status.width = timings.bt.width;
+                    status.height = timings.bt.height;
+                    status.fps = round(static_cast<double>(bt->pixelclock) /(tot_width * tot_height));
+                    status.status = 1;
+                    _hidl_cb(status);
+                    return Void();
+                }
+                private:
+                int mFd;
+            };
+            static IHdmiRxStatusCallbackImpl  IHdmiRxStatusCallbackImpl(videofd);
             sp<rockchip::hardware::hdmi::V1_0::IHdmi> client = rockchip::hardware::hdmi::V1_0::IHdmi::getService();
             if(client.get()!= nullptr){
                 ALOGD("foundHdmiDevice:%s, cameraIdOffset:%d",deviceId.c_str(),mParent->mCfg.cameraIdOffset);
-                client->foundHdmiDevice(::android::hardware::hidl_string(std::to_string(mParent->mCfg.cameraIdOffset+std::stoi(deviceId.c_str()))));
+                 const ::android::sp<rockchip::hardware::hdmi::V1_0::IHdmiRxStatusCallback> cb = &IHdmiRxStatusCallbackImpl;
+                client->foundHdmiDevice(::android::hardware::hidl_string(
+                    std::to_string(mParent->mCfg.cameraIdOffset+std::stoi(deviceId.c_str()))),cb);
             }
 #endif
             ALOGD("mHinDevHandle::%d ,kV4l2DevicePath:%s ,deviceId:%s",mHinDevHandle,kV4l2DevicePath,deviceId.c_str());
