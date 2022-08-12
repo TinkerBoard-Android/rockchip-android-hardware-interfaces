@@ -63,8 +63,8 @@ char android::hardware::camera::device::V3_4::implementation::ExternalCameraDevi
 
 const std::regex kDevicePathRE("/dev/video([0-9]+)");
 
-std::map<int,std::vector<SupportedV4L2Format>> HORIZONTAL_format;
-std::map<int,std::vector<SupportedV4L2Format>> VERTICAL_format;
+static std::map<int,std::vector<SupportedV4L2Format>> HORIZONTAL_format;
+static std::map<int,std::vector<SupportedV4L2Format>> VERTICAL_format;
 
 ExternalCameraDevice::ExternalCameraDevice(
         const std::string& devicePath, const ExternalCameraConfig& cfg) :
@@ -1103,26 +1103,38 @@ if (!mSubDevice){
 
 }
 #ifdef SUBDEVICE_ENABLE
+int mapId = std::stoi(mCameraId.c_str())%CAMERAID_MASK;
     if(outFmts.size()>0){
-        std::vector<SupportedV4L2Format> formats;
-        formats.assign(outFmts.begin(), outFmts.end());
+        std::vector<SupportedV4L2Format >::iterator it;
         if(cropType == HORIZONTAL){
-            HORIZONTAL_format.clear();
-            HORIZONTAL_format[std::stoi(mCameraId.c_str())] = formats;
+            HORIZONTAL_format[mapId].clear();
+            for(it = outFmts.begin();it!=outFmts.end();++it)
+            {
+                HORIZONTAL_format[mapId].push_back(*it);
+            }
         }else if (cropType == VERTICAL)
         {
-            VERTICAL_format.clear();
-            VERTICAL_format[std::stoi(mCameraId.c_str())] = formats;
+            VERTICAL_format[mapId].clear();
+            for(it = outFmts.begin();it!=outFmts.end();++it)
+            {
+                VERTICAL_format[mapId].push_back(*it);
+            }
         }
     }
 
     if(mSubDevice){
-        int subId = std::stoi(mCameraId.c_str()) - 100;
+        std::vector<SupportedV4L2Format >::iterator it;
         if(cropType == HORIZONTAL){
-            outFmts.assign(HORIZONTAL_format[subId].begin(),HORIZONTAL_format[subId].end());
+            for(it = HORIZONTAL_format[mapId].begin();it!=HORIZONTAL_format[mapId].end();++it)
+            {
+                outFmts.push_back(*it);
+            }
         }else if (cropType == VERTICAL)
         {
-            outFmts.assign(VERTICAL_format[subId].begin(),VERTICAL_format[subId].end());
+            for(it = VERTICAL_format[mapId].begin();it!=VERTICAL_format[mapId].end();++it)
+            {
+                outFmts.push_back(*it);
+            }
         }
     }
     ALOGD("@%s,cropType:%d,mCameraId:%s,outFmts.size:%d",__FUNCTION__,cropType,mCameraId.c_str(),outFmts.size());

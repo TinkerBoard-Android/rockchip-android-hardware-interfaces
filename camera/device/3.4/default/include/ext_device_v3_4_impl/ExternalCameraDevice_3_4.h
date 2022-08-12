@@ -31,6 +31,8 @@
 #define SUBDEVICE_OFFSET 200
 #endif
 
+#define CAMERAID_MASK 100
+
 namespace android {
 namespace hardware {
 namespace camera {

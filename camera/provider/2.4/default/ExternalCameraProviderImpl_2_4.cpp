@@ -34,7 +34,7 @@
 #endif
 
 #define FAKE_CAMERA_ENABLE 0
-
+#define FAKE_CAMERAID 100
 namespace android {
 namespace hardware {
 namespace camera {
@@ -187,9 +187,10 @@ Return<void> ExternalCameraProviderImpl_2_4::getCameraDeviceInterface_V3_x(
         return Void();
     }
 
-    if (std::atoi(cameraDevicePath.c_str() + kDevicePrefixLen) >= 100) {
+    if (std::atoi(cameraDevicePath.c_str() + kDevicePrefixLen) >= FAKE_CAMERAID) {
 #ifdef SUBDEVICE_ENABLE
-        if(std::atoi(cameraDevicePath.c_str() + kDevicePrefixLen) == 118||std::atoi(cameraDevicePath.c_str() + kDevicePrefixLen) == 117){
+        if(std::atoi(cameraDevicePath.c_str() + kDevicePrefixLen) > FAKE_CAMERAID
+         && std::atoi(cameraDevicePath.c_str() + kDevicePrefixLen) < SUBDEVICE_OFFSET){
             ALOGV("Constructing v3.4 external sub camera device");
             sp<device::V3_4::implementation::ExternalCameraDevice> deviceImpl =
                 new device::V3_4::implementation::ExternalCameraDevice(
@@ -304,7 +305,7 @@ void ExternalCameraProviderImpl_2_4::addExternalCamera(const char* devName) {
     }
     }
 #ifdef SUBDEVICE_ENABLE
-    if(std::atoi(devName + kDevicePrefixLen)<100){
+    if(std::atoi(devName + kDevicePrefixLen) < FAKE_CAMERAID){
         std::string cameraId = std::to_string(mCfg.cameraIdOffset +
                                           std::atoi(devName + kDevicePrefixLen));
          //addSubCamera
@@ -315,10 +316,11 @@ void ExternalCameraProviderImpl_2_4::addExternalCamera(const char* devName) {
 }
 
 void ExternalCameraProviderImpl_2_4::deviceAdded(const char* devName) {
-    if (std::atoi(devName + kDevicePrefixLen) >= 100)
+    if (std::atoi(devName + kDevicePrefixLen) >= FAKE_CAMERAID)
     {
 #ifdef SUBDEVICE_ENABLE
-        if(std::atoi(devName + kDevicePrefixLen) ==118||std::atoi(devName + kDevicePrefixLen) ==117){
+        if(std::atoi(devName + kDevicePrefixLen) > FAKE_CAMERAID
+         && std::atoi(devName + kDevicePrefixLen) < SUBDEVICE_OFFSET){
             sp<device::V3_4::implementation::ExternalCameraDevice> deviceImpl =
             new device::V3_4::implementation::ExternalCameraDevice(devName, mCfg);
             if (deviceImpl == nullptr || deviceImpl->isInitFailed()) {

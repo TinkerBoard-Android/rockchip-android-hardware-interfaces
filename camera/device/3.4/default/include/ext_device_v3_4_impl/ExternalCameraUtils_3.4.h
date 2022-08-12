@@ -230,6 +230,7 @@ struct HalRequest {
     unsigned long mVirAddr;
     uint8_t* inData;
     size_t inDataSize;
+    std::string cameraId;
 };
 
 static const uint64_t BUFFER_ID_NO_BUFFER = 0;

@@ -431,8 +431,6 @@ protected:
     size_t mNumDequeuedV4l2Buffers = 0;
     uint32_t mMaxV4L2BufferSize = 0;
 
-    static std::mutex sSubDeviceBufferLock;
-    static std::condition_variable sSubDeviceBufferPushed;
     // Not protected by mLock (but might be used when mLock is locked)
     sp<OutputThread> mOutputThread;
     sp<FormatConvertThread> mFormatConvertThread;

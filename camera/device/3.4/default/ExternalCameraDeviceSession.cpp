@@ -264,15 +264,22 @@ const int ExternalCameraDeviceSession::kMaxProcessedStream;
 const int ExternalCameraDeviceSession::kMaxStallStream;
 HandleImporter ExternalCameraDeviceSession::sHandleImporter;
 
-std::mutex ExternalCameraDeviceSession::sSubDeviceBufferLock;
-std::condition_variable ExternalCameraDeviceSession::sSubDeviceBufferPushed;
 
-uint8_t* SubDeviceInData = NULL;
-size_t SubDeviceInDataSize = 0;
+std::map<int, std::mutex> mapSubDeviceBufferLock;
+std::map<int, std::condition_variable> mapSubDeviceBufferPushed;
 
-SupportedV4L2Format sSubDeviceV4l2Fmt {.width = 0, .height = 0};
-double sSubDeviceV4l2StreamingFps = 0.0;
-int sSubDeviceV4L2BufferCount = 0;
+std::map<int, uint8_t*> mapSubDeviceInData;
+std::map<int, size_t> mapSubDeviceInDataSize;
+
+std::map<int, SupportedV4L2Format> mapFmt;
+
+std::map<int, double> mapSubDeviceV4l2StreamingFps;
+std::map<int, int> mapSubDeviceV4L2BufferCount;
+
+std::map<int, int> mapFrameCount;
+std::map<int, int> mapLastFrameCount;
+std::map<int, nsecs_t>  mapLastFpsTime;
+std::map<int, float>  mapFps;
 
 ExternalCameraDeviceSession::ExternalCameraDeviceSession(
         const sp<ICameraDeviceCallback>& callback,
@@ -1078,6 +1085,7 @@ REDEQUE:
         halBuf.acquireFence = allFences[i];
         halBuf.fenceTimeout = false;
     }
+    halReq->cameraId=mCameraId;
     {
         std::lock_guard<std::mutex> lk(mInflightFramesLock);
         mInflightFrames.insert(halReq->frameNumber);
@@ -1264,19 +1272,16 @@ void ExternalCameraDeviceSession::invokeProcessCaptureResultCallback(
     mProcessCaptureResultLock.unlock();
 }
 
-extern "C" void debugShowFPS() {
-    static int mFrameCount = 0;
-    static int mLastFrameCount = 0;
-    static nsecs_t mLastFpsTime = 0;
-    static float mFps = 0;
-    mFrameCount++;
-    if (!(mFrameCount & 0x1F)) {
+extern "C" void debugShowFPS(std::string cameraId) {
+    int mapId = std::stoi(cameraId.c_str());
+    mapFrameCount[mapId]++;
+    if (!(mapFrameCount[mapId] & 0x1F)) {
         nsecs_t now = systemTime();
-        nsecs_t diff = now - mLastFpsTime;
-        mFps = ((mFrameCount - mLastFrameCount) * float(s2ns(1))) / diff;
-        mLastFpsTime = now;
-        mLastFrameCount = mFrameCount;
-        LOGD("Camera %d Frames, %2.3f FPS", mFrameCount, mFps);
+        nsecs_t diff = now - mapLastFpsTime[mapId];
+        mapFps[mapId] = ((mapFrameCount[mapId] - mapLastFrameCount[mapId]) * float(s2ns(1))) / diff;
+        mapLastFpsTime[mapId] = now;
+        mapLastFrameCount[mapId] = mapFrameCount[mapId];
+        LOGD("CameraID:%s, %d Frames, %2.3f FPS",cameraId.c_str(), mapFrameCount[mapId], mapFps[mapId]);
     }
 }
 
@@ -1761,7 +1766,7 @@ bool ExternalCameraDeviceSession::FormatConvertThread::threadLoop() {
                 (req->frameIn->mFourcc >> 24) & 0xFF);
          return true;
     }
-    debugShowFPS();
+    debugShowFPS(req->cameraId);
 #ifdef SUBDEVICE_ENABLE
     if(!mFmtOutputThread->isSubDevice()){
         if (req->frameIn->getData(&inData, &inDataSize) != 0) {
@@ -1784,24 +1789,23 @@ bool ExternalCameraDeviceSession::FormatConvertThread::threadLoop() {
     int tmpW = (req->frameIn->mWidth + 15) & (~15);
     int tmpH = (req->frameIn->mHeight + 15) & (~15);
 #ifdef SUBDEVICE_ENABLE
+    int mapId = std::stoi(req->cameraId.c_str())%CAMERAID_MASK;
     if(!mFmtOutputThread->isSubDevice()){
-        ALOGV("%s,MainDevice mBufferIndex %d",__FUNCTION__,req->frameIn->mBufferIndex);
         {
-            std::lock_guard<std::mutex> lk(sSubDeviceBufferLock);
-            ALOGE("MainDevice inDataSize:%d",inDataSize);
-            if(SubDeviceInData == NULL){
-                SubDeviceInData = (uint8_t*) malloc(req->frameIn->mWidth*req->frameIn->mHeight*4);
+            std::lock_guard<std::mutex> lk(mapSubDeviceBufferLock[mapId]);
+            if(mapSubDeviceInData[mapId] == NULL){
+                mapSubDeviceInData[mapId] = (uint8_t*) malloc(req->frameIn->mWidth*req->frameIn->mHeight*4);
             }
-            memcpy((void*)SubDeviceInData,(void*)inData,inDataSize);
-            SubDeviceInDataSize = inDataSize;
+            memcpy((void*)mapSubDeviceInData[mapId],(void*)inData,inDataSize);
+            mapSubDeviceInDataSize[mapId] = inDataSize;
             ALOGV("%s,MainDevice push",__FUNCTION__);
-            sSubDeviceBufferPushed.notify_one();
+            mapSubDeviceBufferPushed[mapId].notify_one();
         }
     }
     if (mFmtOutputThread->isSubDevice())
     {
-        inData = SubDeviceInData;
-        inDataSize = SubDeviceInDataSize;
+        inData = mapSubDeviceInData[mapId];
+        inDataSize = mapSubDeviceInDataSize[mapId];
     }
 #endif
 
@@ -3639,8 +3643,9 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
     }
 
     if(isSubDevice()){
-        mV4l2StreamingFps = sSubDeviceV4l2StreamingFps;
-        mV4L2BufferCount = sSubDeviceV4L2BufferCount;
+        int mapId = std::stoi(mCameraId.c_str())%CAMERAID_MASK;
+        mV4l2StreamingFps = mapSubDeviceV4l2StreamingFps[mapId];
+        mV4L2BufferCount = mapSubDeviceV4L2BufferCount[mapId];
     }else{
     // VIDIOC_S_FMT w/h/fmt
     v4l2_format fmt;
@@ -3728,7 +3733,8 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
 #ifdef SUBDEVICE_ENABLE
     if (!isSubDevice())
     {
-        sSubDeviceV4l2StreamingFps = mV4l2StreamingFps;
+        int mapId = std::stoi(mCameraId.c_str())%CAMERAID_MASK;
+        mapSubDeviceV4l2StreamingFps[mapId] = mV4l2StreamingFps;
     }
 #endif
 
@@ -3760,7 +3766,8 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
 #ifdef SUBDEVICE_ENABLE
     if (!isSubDevice())
     {
-        sSubDeviceV4L2BufferCount = mV4L2BufferCount;
+        int mapId = std::stoi(mCameraId.c_str())%CAMERAID_MASK;
+        mapSubDeviceV4L2BufferCount[mapId] = mV4L2BufferCount;
     }
 #endif
     for (uint32_t i = 0; i < req_buffers.count; i++) {
@@ -3891,13 +3898,13 @@ sp<V4L2Frame> ExternalCameraDeviceSession::dequeueV4l2FrameLocked(/*out*/nsecs_t
         }
     }
     if(isSubDevice()){
-        std::unique_lock<std::mutex> lk(sSubDeviceBufferLock);
+        int mapId = std::stoi(mCameraId.c_str())%CAMERAID_MASK;
+        std::unique_lock<std::mutex> lk(mapSubDeviceBufferLock[mapId]);
         std::chrono::seconds timeout = std::chrono::seconds(kBufferWaitTimeoutSec);
-        auto st = sSubDeviceBufferPushed.wait_for(lk, timeout);
+        auto st = mapSubDeviceBufferPushed[mapId].wait_for(lk, timeout);
         if (st == std::cv_status::timeout) {
             ALOGE("wait mSubDeviceBufferPushed timeout");
         }
-        ALOGV("%s,SubDevice get buffer",__FUNCTION__);
     }
 #else
     if (mCapability.device_caps & V4L2_CAP_VIDEO_CAPTURE_MPLANE)
@@ -4191,13 +4198,19 @@ Status ExternalCameraDeviceSession::configureStreams(
                 (format >> 8) & 0xFF,
                 (format >> 16) & 0xFF,
                 (format >> 24) & 0xFF);
-            ALOGE("formatsource:%s",formatsource);
+            ALOGE("mCameraId:%s formatsource:%s",mCameraId.c_str(),formatsource);
             v4l2Fmt.fourcc = format;
             hdmiFourcc = format;
         }
 #ifdef SUBDEVICE_ENABLE
         else if (strlen(deviceId.c_str())>0 && hdmiFourcc != 0 &&
             std::stoi(mCameraId.c_str()) - std::stoi(deviceId.c_str()) == 100){
+            char formatsource[5]{0};
+            sprintf(formatsource,"%c%c%c%c",hdmiFourcc & 0xFF,
+                (hdmiFourcc >> 8) & 0xFF,
+                (hdmiFourcc >> 16) & 0xFF,
+                (hdmiFourcc >> 24) & 0xFF);
+            ALOGE("mCameraId:%s save hdmiFourcc:%s",mCameraId.c_str(),formatsource);
             v4l2Fmt.fourcc= hdmiFourcc;
         }
 #endif
@@ -4205,7 +4218,8 @@ Status ExternalCameraDeviceSession::configureStreams(
 #endif
 #ifdef SUBDEVICE_ENABLE
     if(isSubDevice()){
-        v4l2Fmt = sSubDeviceV4l2Fmt;
+        int mapId = std::stoi(mCameraId.c_str())%CAMERAID_MASK;
+        v4l2Fmt = mapFmt[mapId];
     }
 #endif
     if (v4l2Fmt.width == 0) {
@@ -4240,10 +4254,10 @@ Status ExternalCameraDeviceSession::configureStreams(
         return Status::INTERNAL_ERROR;
     }
 #ifdef SUBDEVICE_ENABLE
-    ALOGD("isSubDevice():%d,v4l2Fmt.width:%d,v4l2Fmt.height:%d",isSubDevice(),v4l2Fmt.width,v4l2Fmt.height);
     if (!isSubDevice())
     {
-        sSubDeviceV4l2Fmt = v4l2Fmt;
+        int mapId = std::stoi(mCameraId.c_str())%CAMERAID_MASK;
+        mapFmt[mapId]=  v4l2Fmt;
     }
 #endif
     createPreviewBuffer();
