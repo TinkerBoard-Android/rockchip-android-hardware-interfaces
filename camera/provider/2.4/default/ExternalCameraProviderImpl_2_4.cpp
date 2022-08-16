@@ -190,7 +190,7 @@ Return<void> ExternalCameraProviderImpl_2_4::getCameraDeviceInterface_V3_x(
     if (std::atoi(cameraDevicePath.c_str() + kDevicePrefixLen) >= FAKE_CAMERAID) {
 #ifdef SUBDEVICE_ENABLE
         if(std::atoi(cameraDevicePath.c_str() + kDevicePrefixLen) > FAKE_CAMERAID
-         && std::atoi(cameraDevicePath.c_str() + kDevicePrefixLen) < SUBDEVICE_OFFSET){
+         && std::atoi(cameraDevicePath.c_str() + kDevicePrefixLen) < SUBDEVICE_OFFSET + (SUBDEVICE_NUM-1)*CAMERAID_MASK){
             ALOGV("Constructing v3.4 external sub camera device");
             sp<device::V3_4::implementation::ExternalCameraDevice> deviceImpl =
                 new device::V3_4::implementation::ExternalCameraDevice(
@@ -305,10 +305,11 @@ void ExternalCameraProviderImpl_2_4::addExternalCamera(const char* devName) {
     }
     }
 #ifdef SUBDEVICE_ENABLE
-    if(std::atoi(devName + kDevicePrefixLen) < FAKE_CAMERAID){
+    if(std::atoi(devName + kDevicePrefixLen) + mCfg.cameraIdOffset < SUBDEVICE_OFFSET + (SUBDEVICE_NUM-1)*CAMERAID_MASK){
         std::string cameraId = std::to_string(mCfg.cameraIdOffset +
                                           std::atoi(devName + kDevicePrefixLen));
          //addSubCamera
+        ALOGD("@%s,%d, cameraId:%s ,SUBDEVICE_NUM:%d",__FUNCTION__,__LINE__,cameraId.c_str(),SUBDEVICE_NUM);
         std::string subDevName = (std::string("/dev/video")+cameraId);
         deviceAdded(subDevName.c_str());
     }
@@ -320,7 +321,7 @@ void ExternalCameraProviderImpl_2_4::deviceAdded(const char* devName) {
     {
 #ifdef SUBDEVICE_ENABLE
         if(std::atoi(devName + kDevicePrefixLen) > FAKE_CAMERAID
-         && std::atoi(devName + kDevicePrefixLen) < SUBDEVICE_OFFSET){
+         && std::atoi(devName + kDevicePrefixLen) < SUBDEVICE_OFFSET + (SUBDEVICE_NUM-1)*CAMERAID_MASK){
             sp<device::V3_4::implementation::ExternalCameraDevice> deviceImpl =
             new device::V3_4::implementation::ExternalCameraDevice(devName, mCfg);
             if (deviceImpl == nullptr || deviceImpl->isInitFailed()) {
@@ -367,7 +368,6 @@ void ExternalCameraProviderImpl_2_4::deviceAdded(const char* devName) {
     }
     deviceImpl.clear();
     }
-
     addExternalCamera(devName);
     return;
 }
@@ -394,12 +394,12 @@ void ExternalCameraProviderImpl_2_4::deviceRemoved(const char* devName) {
     }
     }
 #ifdef SUBDEVICE_ENABLE
-    std::string cameraId = std::to_string(SUBDEVICE_OFFSET +
-                                          std::atoi(devName + kDevicePrefixLen));
-    if(std::atoi(cameraId.c_str()) > SUBDEVICE_OFFSET && std::atoi(cameraId.c_str()) < SUBDEVICE_OFFSET + 100){
+    std::string cameraId = std::to_string(mCfg.cameraIdOffset + std::atoi(devName + kDevicePrefixLen));
+    ALOGV("@%s,%d,devName:%s,cameraId:%s",__FUNCTION__,__LINE__,devName,cameraId.c_str());
+    if(std::atoi(cameraId.c_str()) > FAKE_CAMERAID && std::atoi(cameraId.c_str()) < SUBDEVICE_OFFSET + (SUBDEVICE_NUM-1)*CAMERAID_MASK){
         cameraId = std::to_string(mCfg.cameraIdOffset +
                                           std::atoi(devName + kDevicePrefixLen));
-                                          ALOGD("@%s,cameraId:%s",__FUNCTION__,cameraId.c_str());
+                                          ALOGV("@%s(%d) cameraId:%s",__FUNCTION__,__LINE__,cameraId.c_str());
         std::string deviceName = std::string("/dev/video") + cameraId;
         deviceRemoved(deviceName.c_str());
     }

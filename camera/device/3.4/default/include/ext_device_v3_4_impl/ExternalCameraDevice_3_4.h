@@ -29,6 +29,8 @@
 
 #ifdef SUBDEVICE_ENABLE
 #define SUBDEVICE_OFFSET 200
+
+#define SUBDEVICE_NUM 1 //1~5
 #endif
 
 #define CAMERAID_MASK 100
