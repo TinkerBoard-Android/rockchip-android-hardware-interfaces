@@ -1488,7 +1488,7 @@ bool ExternalCameraDeviceSession::V4L2EventThread::threadLoop() {
     fds[1].events = POLLPRI;
     struct v4l2_event ev;
     CLEAR(ev);
-    if (poll(fds, 2, 5000) < 0) {
+    if (poll(fds, 2, 300) < 0) {
 	ALOGD("%d: poll failed: %s\n", mVideoFd, strerror(errno));
 	return false;
     }
@@ -3134,7 +3134,7 @@ bool ExternalCameraDeviceSession::OutputThread::threadLoop() {
                         halBuf.width, halBuf.height, 100, false, true,
                         (halBuf.format == PixelFormat::YCRCB_420_SP), is16Align,
                         req->frameIn->mFourcc == V4L2_PIX_FMT_YUYV);
-                    ALOGD("%s: ANDROID_SCALER_CROP_REGION not set",__FUNCTION__);
+                    ALOGV("%s: ANDROID_SCALER_CROP_REGION not set",__FUNCTION__);
                 }
 #ifdef DUMP_YUV
                     {
