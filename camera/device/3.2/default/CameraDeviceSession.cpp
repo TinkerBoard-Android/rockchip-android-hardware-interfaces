@@ -16,6 +16,7 @@
 
 #define LOG_TAG "CamDevSession@3.2-impl"
 #include <android/log.h>
+//#define LOG_NDEBUG 0
 
 #include <set>
 #include <cutils/properties.h>
@@ -879,6 +880,7 @@ Status CameraDeviceSession::constructDefaultRequestSettingsRaw(int type, CameraM
  */
 android_dataspace CameraDeviceSession::mapToLegacyDataspace(
         android_dataspace dataSpace) const {
+
     if (mDeviceVersion <= CAMERA_DEVICE_API_VERSION_3_3) {
         switch (dataSpace) {
             case HAL_DATASPACE_V0_SRGB_LINEAR:
@@ -1088,6 +1090,10 @@ Return<void> CameraDeviceSession::configureStreams(
     } else {
         convertToHidl(stream_list, &outStreams);
         mFirstRequest = true;
+    }
+
+    for (size_t i = 0; i < requestedConfiguration.streams.size(); i++) {
+        outStreams.streams[i].producerUsage |= RK_GRALLOC_USAGE_RANGE_FULL | RK_GRALLOC_USAGE_YUV_COLOR_SPACE_BT601;
     }
 
     _hidl_cb(status, outStreams);

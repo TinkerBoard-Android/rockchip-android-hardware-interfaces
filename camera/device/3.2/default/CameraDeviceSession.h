@@ -31,6 +31,8 @@
 #include "hardware/camera3.h"
 #include "hardware/camera_common.h"
 #include "utils/Mutex.h"
+#define RK_GRALLOC_USAGE_RANGE_FULL 1ULL << 50
+#define RK_GRALLOC_USAGE_YUV_COLOR_SPACE_BT601 1ULL << 49
 
 namespace android {
 namespace hardware {
@@ -54,6 +56,7 @@ using ::android::hardware::hidl_vec;
 using ::android::hardware::hidl_string;
 using ::android::sp;
 using ::android::Mutex;
+using ::android::hardware::graphics::common::V1_0::BufferUsage;
 
 struct Camera3Stream;
 

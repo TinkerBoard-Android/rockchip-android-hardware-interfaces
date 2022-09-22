@@ -105,6 +105,13 @@ Return<void> CameraDeviceSession::configureStreams_3_3(
         mFirstRequest = true;
     }
 
+    //outStreams.streams.resize(requestedConfiguration.streams.size());
+
+    for (size_t i = 0; i < requestedConfiguration.streams.size(); i++) {
+        outStreams.streams[i].v3_2.producerUsage |= RK_GRALLOC_USAGE_RANGE_FULL | RK_GRALLOC_USAGE_YUV_COLOR_SPACE_BT601;
+        ALOGD(" @%s(%d), overrideUsage add RANGE_FULL&COLOR_SPACE_BT601!\n.", __FUNCTION__, __LINE__);
+    }
+
     _hidl_cb(status, outStreams);
     return Void();
 }
