@@ -307,6 +307,8 @@ package android.audio.policy.configuration.V7_0 {
     enum_constant public static final android.audio.policy.configuration.V7_0.AudioSource AUDIO_SOURCE_DEFAULT;
     enum_constant public static final android.audio.policy.configuration.V7_0.AudioSource AUDIO_SOURCE_ECHO_REFERENCE;
     enum_constant public static final android.audio.policy.configuration.V7_0.AudioSource AUDIO_SOURCE_FM_TUNER;
+    enum_constant public static final android.audio.policy.configuration.V7_0.AudioSource AUDIO_SOURCE_HDMIIN;
+    enum_constant public static final android.audio.policy.configuration.V7_0.AudioSource AUDIO_SOURCE_HDMIIN_1;
     enum_constant public static final android.audio.policy.configuration.V7_0.AudioSource AUDIO_SOURCE_HOTWORD;
     enum_constant public static final android.audio.policy.configuration.V7_0.AudioSource AUDIO_SOURCE_MIC;
     enum_constant public static final android.audio.policy.configuration.V7_0.AudioSource AUDIO_SOURCE_REMOTE_SUBMIX;
