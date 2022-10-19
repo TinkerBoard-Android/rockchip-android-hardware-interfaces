@@ -232,21 +232,6 @@ struct ExternalCameraDeviceSession : public virtual RefBase,
         static const int kReqWaitTimeoutMs = 33;   // 33ms
         static const int kReqWaitTimesMax = 90;    // 33ms * 90 ~= 3 sec
     };
-    class V4L2EventThread : public android::Thread {
-        public:
-            V4L2EventThread(int fd,wp<OutputThreadInterface> parent);
-            ~V4L2EventThread();
-            int subscribeEvent(int fd,int event);
-            int unsubscribeEvent(int fd,int event);
-            virtual bool v4l2pipe();
-            virtual void openDevice();
-            virtual void closeDevice();
-            virtual bool threadLoop() override;
-        private :
-            int mVideoFd;
-            int pipefd[2] = {-1, -1};
-            wp<OutputThreadInterface> mParent;
-    };
 
     class SubVideoThread : public android::Thread {
         public:
@@ -425,7 +410,8 @@ protected:
     struct v4l2_plane planes[1];
     struct v4l2_capability mCapability;
 
-    static const int kBufferWaitTimeoutSec = 3; // TODO: handle long exposure (or not allowing)
+    static const int kBufferWaitTimeoutSec = 1; // TODO: handle long exposure (or not allowing)
+    static const int kBufferWaitTimeoutUSec = 1000 * 600;
     std::mutex mV4l2BufferLock; // protect the buffer count and condition below
     std::condition_variable mV4L2BufferReturned;
     size_t mNumDequeuedV4l2Buffers = 0;
@@ -434,7 +420,6 @@ protected:
     // Not protected by mLock (but might be used when mLock is locked)
     sp<OutputThread> mOutputThread;
     sp<FormatConvertThread> mFormatConvertThread;
-    sp<V4L2EventThread> mV4L2EventThread;
     sp<SubVideoThread> mSubVideoThread;
 
     // Stream ID -> Camera3Stream cache

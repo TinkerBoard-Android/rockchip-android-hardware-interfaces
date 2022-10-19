@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2021 Rockchip Electronics Co., Ltd
  */
-#define LOG_TAG "V4L2DeviceEvent"
+#define LOG_TAG "V4L2DeviceEvent-camera"
 
 #include <cutils/log.h>
 #include <sys/stat.h>
@@ -293,8 +293,6 @@ void V4L2DeviceEvent::V4L2EventThread::closeDevice()
 bool V4L2DeviceEvent::V4L2EventThread::threadLoop() {
     ALOGV("@%s", __FUNCTION__);
     struct pollfd fds[2];
-    //int retry = 3;
-    //fds.events = POLLIN | POLLRDNORM | POLLOUT | POLLWRNORM | POLLRDBAND | POLLPRI;
     fds[0].fd = pipefd[0];
     fds[0].events = POLLIN;
 
@@ -303,37 +301,37 @@ bool V4L2DeviceEvent::V4L2EventThread::threadLoop() {
     struct v4l2_event ev;
     CLEAR(ev);
     if (poll(fds, 2, 5000) < 0) {
-	ALOGD("%d: poll failed: %s\n", mVideoFd, strerror(errno));
-	return false;
+        ALOGD("%d: poll failed: %s\n", mVideoFd, strerror(errno));
+        return false;
     }
     if (fds[0].revents & POLLIN) {
-	ALOGD("%d: quit message received\n", mVideoFd);
-	return false;
+        ALOGD("%d: quit message received\n", mVideoFd);
+        return false;
     }
     if (fds[1].revents & POLLPRI) {
-	if (ioctl(fds[1].fd, VIDIOC_DQEVENT, &ev) == 0) {
-		switch (ev.type) {
-		case V4L2_EVENT_SOURCE_CHANGE:
-			ALOGD("%d: V4L2_EVENT_SOURCE_CHANGE event\n", mVideoFd);
-			/*retry = 3;
-			while(retry-- >= 0){
-			  if(!getFormat()) break;
-			  else usleep(100*1000);
-			}*/
-			break;
-		case V4L2_EVENT_CTRL:
-			ALOGD("%d:  V4L2_EVENT_CTRL event \n", mVideoFd );
-		        //getHdmiIn(false);
-			break;
-		default:
-			ALOGD("%d: unknown event\n", mVideoFd);
-			break;
-		}
-		if(mCallback_ != NULL)
-                  mCallback_(ev.type);
-	} else {
-		ALOGD("%d: VIDIOC_DQEVENT failed: %s\n",mVideoFd, strerror(errno));
-	}
+        if (ioctl(fds[1].fd, VIDIOC_DQEVENT, &ev) == 0) {
+            switch (ev.type) {
+                case V4L2_EVENT_SOURCE_CHANGE:
+                    {
+                        ALOGD("%d: V4L2_EVENT_SOURCE_CHANGE value:%d\n", mVideoFd,1);
+                        if(mCallback_ != NULL)
+                            mCallback_(1);
+                    }
+                    break;
+                case V4L2_EVENT_CTRL:{
+                    struct v4l2_event_ctrl* ctrl =(struct v4l2_event_ctrl*) &(ev.u);
+                    ALOGD("%d:  V4L2_EVENT_CTRL event value:%d \n", mVideoFd,ctrl->value);
+                    if(mCallback_ != NULL&&ctrl->value== 0)
+                        mCallback_(ctrl->value);
+                    }
+                    break;
+                default:
+                    ALOGD("%d: unknown event :%d\n", mVideoFd,ev.type);
+                    break;
+            }
+        } else {
+            ALOGD("%d: VIDIOC_DQEVENT failed: %s\n",mVideoFd, strerror(errno));
+        }
     }
     return true;
 }

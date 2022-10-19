@@ -409,11 +409,6 @@ bool ExternalCameraDeviceSession::initialize() {
     // TODO: check is PRIORITY_DISPLAY enough?
     mOutputThread->run("ExtCamOut", PRIORITY_DISPLAY);
     mFormatConvertThread->run("ExtFmtCvt", PRIORITY_DISPLAY);
-#ifdef HDMI_ENABLE
-    mV4L2EventThread = new V4L2EventThread(mV4l2Fd.get(), this);
-    mV4L2EventThread->v4l2pipe();
-    mV4L2EventThread->run("HDMIEvent", PRIORITY_DISPLAY);
-#endif
 
 #ifdef HDMI_ENABLE
 #ifdef HDMI_SUBVIDEO_ENABLE
@@ -760,12 +755,6 @@ Return<void> ExternalCameraDeviceSession::close(bool callerIsDtor) {
         //mFormatConvertThread->flush();
         mFormatConvertThread->requestExit();
         mFormatConvertThread->join();
-
-        if (mV4L2EventThread) {
-            mV4L2EventThread->requestExit();
-            mV4L2EventThread->join();
-            mV4L2EventThread.clear();
-        }
 
         if(mSubVideoThread){
             mSubVideoThread->requestExit();
@@ -1381,7 +1370,7 @@ int ExternalCameraDeviceSession::SubVideoThread::jpegDecoder(uint8_t* inData, si
         return -1;
     }
 
-    ALOGE("@%s,MemVirAddr:%p,OutputSize：%d",
+    ALOGE("@%s,MemVirAddr:%p,OutputSize:%d",
     __FUNCTION__,mHWDecoderFrameOut.MemVirAddr,mHWDecoderFrameOut.OutputSize);
     return ret;
 }
@@ -1398,133 +1387,6 @@ bool ExternalCameraDeviceSession::SubVideoThread::threadLoop(){
     return true;
 }
 
-ExternalCameraDeviceSession::V4L2EventThread::V4L2EventThread(int fd, wp<OutputThreadInterface> parent){
-    mVideoFd = fd;
-    mParent = parent;
-    subscribeEvent(fd,V4L2_EVENT_SOURCE_CHANGE);
-    subscribeEvent(fd,V4L2_EVENT_CTRL);
-}
-
-ExternalCameraDeviceSession::V4L2EventThread::~V4L2EventThread() {
-
-}
-
-
-
-bool ExternalCameraDeviceSession::V4L2EventThread::v4l2pipe() {
-    ALOGI("@%s", __FUNCTION__);
-    if (pipe(pipefd) < 0) {
-	ALOGE("pipe failed: %s\n", strerror(errno));
-	return false;
-    }
-    return true;
-}
-void  ExternalCameraDeviceSession::V4L2EventThread::openDevice()
-{
-    char video_name[64];
-    memset(video_name, 0, sizeof(video_name));
-    strcat(video_name, "/dev/v4l-subdev2");
-}
-
-void ExternalCameraDeviceSession::V4L2EventThread::closeDevice()
-{
-    ALOGI("close device");
-    if (write(pipefd[1], "q", 1) != 1) {}
-    ::close(pipefd[0]);
-    ::close(pipefd[1]);
-}
-
-
-int ExternalCameraDeviceSession::V4L2EventThread::subscribeEvent(int fd,int event)
-{
-    ALOGI("@%s", __FUNCTION__);
-    int ret(0);
-    struct v4l2_event_subscription sub;
-
-    if (fd == -1) {
-        ALOGW("Device %d already closed. cannot subscribe.",fd);
-        return -1;
-    }
-
-    CLEAR(sub);
-    sub.type = event;
-    if(event == V4L2_EVENT_CTRL)sub.id = V4L2_CID_DV_RX_POWER_PRESENT;
-    ret = ioctl(fd, VIDIOC_SUBSCRIBE_EVENT, &sub);
-    if (ret < 0) {
-        ALOGE("error subscribing event %x: %s", event, strerror(errno));
-        return ret;
-    }
-
-    return ret;
-}
-
-int ExternalCameraDeviceSession::V4L2EventThread::unsubscribeEvent(int fd,int event)
-{
-    ALOGI("@%s", __FUNCTION__);
-    int ret(0);
-    struct v4l2_event_subscription sub;
-
-    if (fd == -1) {
-        ALOGW("Device %d closed. cannot unsubscribe.", fd);
-        return -1;
-    }
-
-    CLEAR(sub);
-    sub.type = event;
-
-    ret = ioctl(fd, VIDIOC_UNSUBSCRIBE_EVENT, &sub);
-    if (ret < 0) {
-        ALOGE("error unsubscribing event %x :%s",event,strerror(errno));
-        return ret;
-    }
-
-    return ret;
-}
-
-bool ExternalCameraDeviceSession::V4L2EventThread::threadLoop() {
-    ALOGV("@%s", __FUNCTION__);
-    struct pollfd fds[2];
-    //int retry = 3;
-    //fds.events = POLLIN | POLLRDNORM | POLLOUT | POLLWRNORM | POLLRDBAND | POLLPRI;
-    fds[0].fd = pipefd[0];
-    fds[0].events = POLLIN;
-
-    fds[1].fd = mVideoFd;
-    fds[1].events = POLLPRI;
-    struct v4l2_event ev;
-    CLEAR(ev);
-    if (poll(fds, 2, 300) < 0) {
-	ALOGD("%d: poll failed: %s\n", mVideoFd, strerror(errno));
-	return false;
-    }
-    if (fds[0].revents & POLLIN) {
-	ALOGD("%d: quit message received\n", mVideoFd);
-	return false;
-    }
-    if (fds[1].revents & POLLPRI) {
-	if (ioctl(fds[1].fd, VIDIOC_DQEVENT, &ev) == 0) {
-		switch (ev.type) {
-            case V4L2_EVENT_SOURCE_CHANGE:{
-                ALOGD("%d: V4L2_EVENT_SOURCE_CHANGE event\n", mVideoFd);
-                std::exit(0);
-                break;
-            }
-            case V4L2_EVENT_CTRL:{
-                ALOGD("%d:  V4L2_EVENT_CTRL event \n", mVideoFd );
-                v4l2_buf_type capture_type;
-                    std::exit(0);
-                break;
-            }
-            // case default:
-            // 	ALOGD("%d: unknown event\n", mVideoFd);
-            // 	break;
-		}
-	} else {
-		ALOGD("%d: VIDIOC_DQEVENT failed: %s\n",mVideoFd, strerror(errno));
-	}
-    }
-    return true;
-}
 ExternalCameraDeviceSession::FormatConvertThread::FormatConvertThread(
         sp<OutputThread>& mOutputThread) {
     //memset(&mHWJpegDecoder, 0, sizeof(MpiJpegDecoder));
@@ -3932,7 +3794,14 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
 sp<V4L2Frame> ExternalCameraDeviceSession::dequeueV4l2FrameLocked(/*out*/nsecs_t* shutterTs) {
     ATRACE_CALL();
     sp<V4L2Frame> ret = nullptr;
+    int ts;
+    fd_set fds;
+    struct timeval tv;
 
+    FD_ZERO(&fds);
+    FD_SET(mV4l2Fd.get(), &fds);
+    tv.tv_sec = kBufferWaitTimeoutSec;
+    tv.tv_usec = kBufferWaitTimeoutUSec;
     if (shutterTs == nullptr) {
         ALOGE("%s: shutterTs must not be null!", __FUNCTION__);
         return ret;
@@ -3961,7 +3830,14 @@ sp<V4L2Frame> ExternalCameraDeviceSession::dequeueV4l2FrameLocked(/*out*/nsecs_t
             buffer.m.planes = planes;
             buffer.length = PLANES_NUM;
         }
-
+        ALOGV("@%s(%d) select time begin ",__FUNCTION__,__LINE__);
+        ts = select(mV4l2Fd.get() + 1, &fds, NULL, NULL, &tv);
+        ALOGV("@%s(%d) select time done.",__FUNCTION__,__LINE__);
+        if(ts == 0)
+        {
+            ALOGE("@%s(%d) select time out",__FUNCTION__,__LINE__);
+            return ret;
+        }
         if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_DQBUF, &buffer)) < 0) {
             ALOGE("%s: DQBUF fails: %s", __FUNCTION__, strerror(errno));
             return ret;
@@ -3986,7 +3862,14 @@ sp<V4L2Frame> ExternalCameraDeviceSession::dequeueV4l2FrameLocked(/*out*/nsecs_t
         buffer.m.planes = planes;
         buffer.length = PLANES_NUM;
     }
-
+    ALOGV("@%s(%d) select time begin ",__FUNCTION__,__LINE__);
+    ts = select(mV4l2Fd.get() + 1, &fds, NULL, NULL, &tv);
+    ALOGV("@%s(%d) select time done.",__FUNCTION__,__LINE__);
+	if(ts == 0)
+	{
+        ALOGE("@%s(%d) select time out",__FUNCTION__,__LINE__);
+		return ret;
+	}
     if (TEMP_FAILURE_RETRY(ioctl(mV4l2Fd.get(), VIDIOC_DQBUF, &buffer)) < 0) {
         ALOGE("%s: DQBUF fails: %s", __FUNCTION__, strerror(errno));
         return ret;

@@ -109,10 +109,13 @@ ExternalCameraProviderImpl_2_4::~ExternalCameraProviderImpl_2_4() {
         ExternalCameraProviderImpl_2_4::mV4l2Event->closeEventThread();
 
 }
-V4L2EventCallBack ExternalCameraProviderImpl_2_4::hinDevEventCallback(int event_type){
-    ALOGD("@%s,event_type:%d",__FUNCTION__,event_type);
-    ExternalCameraProviderImpl_2_4::sInstance->deviceRemoved(kV4l2DevicePath);
-    ExternalCameraProviderImpl_2_4::sInstance->deviceAdded(kV4l2DevicePath);
+V4L2EventCallBack ExternalCameraProviderImpl_2_4::hinDevEventCallback(int status){
+    ALOGD("@%s,status:%d",__FUNCTION__,status);
+    if(status){
+        ExternalCameraProviderImpl_2_4::sInstance->deviceAdded(kV4l2DevicePath);
+    }else{
+        ExternalCameraProviderImpl_2_4::sInstance->deviceRemoved(kV4l2DevicePath);
+    }
     return 0;
 }
 
