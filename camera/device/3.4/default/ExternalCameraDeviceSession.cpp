@@ -3777,6 +3777,7 @@ int ExternalCameraDeviceSession::configureV4l2StreamLocked(
     }
 
     if (v4l2Fmt.fourcc == V4L2_PIX_FMT_H264) {
+        mFormatConvertThread->destroyH264Decoder();
         mFormatConvertThread->createH264Decoder(v4l2Fmt.width, v4l2Fmt.height);
         isNeedCheckIFrame = true;
     }
