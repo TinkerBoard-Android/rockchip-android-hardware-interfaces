@@ -734,6 +734,8 @@
             <xs:enumeration value="AUDIO_SOURCE_UNPROCESSED"/>
             <xs:enumeration value="AUDIO_SOURCE_VOICE_PERFORMANCE"/>
             <xs:enumeration value="AUDIO_SOURCE_ECHO_REFERENCE"/>
+            <xs:enumeration value="AUDIO_SOURCE_HDMIIN"/>
+            <xs:enumeration value="AUDIO_SOURCE_HDMIIN_1"/>
             <xs:enumeration value="AUDIO_SOURCE_FM_TUNER"/>
             <xs:enumeration value="AUDIO_SOURCE_HOTWORD"/>
         </xs:restriction>
