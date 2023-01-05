@@ -330,6 +330,9 @@
         -->
         <xs:restriction base="xs:string">
             <xs:pattern value="VX_[A-Z0-9]{3,}_[_A-Z0-9]+"/>
+            <xs:enumeration value="VX_ROCKCHIP_OUT_HDMI0"/>
+            <xs:enumeration value="VX_ROCKCHIP_OUT_SPDIF0"/>
+            <xs:enumeration value="VX_ROCKCHIP_IN_HDMI0"/>
         </xs:restriction>
     </xs:simpleType>
     <xs:simpleType name="extendableAudioDevice">

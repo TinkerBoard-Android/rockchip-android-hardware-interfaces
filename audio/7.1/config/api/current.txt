@@ -569,6 +569,13 @@ package android.audio.policy.configuration.V7_1 {
     method public void setFormats(@Nullable android.audio.policy.configuration.V7_1.SurroundFormats);
   }
 
+  public enum VendorExtension {
+    method @NonNull public String getRawName();
+    enum_constant public static final android.audio.policy.configuration.V7_1.VendorExtension VX_ROCKCHIP_IN_HDMI0;
+    enum_constant public static final android.audio.policy.configuration.V7_1.VendorExtension VX_ROCKCHIP_OUT_HDMI0;
+    enum_constant public static final android.audio.policy.configuration.V7_1.VendorExtension VX_ROCKCHIP_OUT_SPDIF0;
+  }
+
   public enum Version {
     method @NonNull public String getRawName();
     enum_constant public static final android.audio.policy.configuration.V7_1.Version _7_0;
