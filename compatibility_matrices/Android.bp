@@ -68,6 +68,7 @@ vintf_compatibility_matrix {
     kernel_configs: [
         "kernel_config_t_5.10",
         "kernel_config_t_5.15",
+        "kernel_config_u_6.1",
     ],
 }
 
