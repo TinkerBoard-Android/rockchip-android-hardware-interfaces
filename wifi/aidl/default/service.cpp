@@ -25,6 +25,8 @@
 #include "wifi_legacy_hal_factory.h"
 #include "wifi_mode_controller.h"
 
+extern "C" int wifi_load_driver();
+
 using aidl::android::hardware::wifi::feature_flags::WifiFeatureFlags;
 using aidl::android::hardware::wifi::legacy_hal::WifiLegacyHal;
 using aidl::android::hardware::wifi::legacy_hal::WifiLegacyHalFactory;
@@ -41,6 +43,7 @@ int main(int /*argc*/, char** argv) {
     android::base::InitLogging(argv, android::base::LogdLogger(android::base::SYSTEM));
     LOG(INFO) << "Wifi Hal is booting up...";
 
+    wifi_load_driver();
     // Prepare the RPC-serving thread pool. Allocate 1 thread in the pool,
     // which our main thread will join below.
     ABinderProcess_setThreadPoolMaxThreadCount(1);

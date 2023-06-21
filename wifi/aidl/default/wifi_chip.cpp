@@ -48,6 +48,8 @@ constexpr char kNoActiveWlanIfaceNamePropertyValue[] = "";
 constexpr unsigned kMaxWlanIfaces = 5;
 constexpr char kApBridgeIfacePrefix[] = "ap_br_";
 
+extern "C" int check_wifi_chip_type_string(char *type);
+static char wifi_type[64] = {0};
 template <typename Iface>
 void invalidateAndClear(std::vector<std::shared_ptr<Iface>>& ifaces, std::shared_ptr<Iface> iface) {
     iface->invalidate();
@@ -127,7 +129,21 @@ std::string getPredefinedP2pIfaceName() {
     char p2pParentIfname[100];
     std::string p2pDevIfName = "";
     std::array<char, PROPERTY_VALUE_MAX> buffer;
-    property_get("wifi.direct.interface", buffer.data(), "p2p0");
+    // @Rockchip fix
+    if (wifi_type[0] == 0) {
+        check_wifi_chip_type_string(wifi_type);
+    }
+    if ((0 == strncmp(wifi_type, "AP", 2))
+		    || (0 == strncmp(wifi_type, "SPRDWL", 6))
+		    || (0 == strncmp(wifi_type, "AIC", 3))
+		    || (0 == strncmp(wifi_type, "BES2600", 6))) {
+        property_set("vendor.wifi.direct.interface", "p2p-dev-wlan0");
+        property_get("wifi.direct.interface", buffer.data(), "p2p-dev-wlan0");
+    } else {
+        property_set("vendor.wifi.direct.interface", "p2p0");
+        property_get("wifi.direct.interface", buffer.data(), "p2p0");
+    }
+    // @end
     if (strncmp(buffer.data(), P2P_MGMT_DEVICE_PREFIX, strlen(P2P_MGMT_DEVICE_PREFIX)) == 0) {
         /* Get the p2p parent interface name from p2p device interface name set
          * in property */
@@ -1140,6 +1156,17 @@ std::pair<std::shared_ptr<IWifiP2pIface>, ndk::ScopedAStatus> WifiChip::createP2
 }
 
 std::pair<std::vector<std::string>, ndk::ScopedAStatus> WifiChip::getP2pIfaceNamesInternal() {
+    if (wifi_type[0] == 0) {
+        check_wifi_chip_type_string(wifi_type);
+    }
+    if ((0 == strncmp(wifi_type, "AP", 2))
+		    || (0 == strncmp(wifi_type, "SPRDWL", 6))
+		    || (0 == strncmp(wifi_type, "AIC", 3))
+		    || (0 == strncmp(wifi_type, "BES2600", 6))) {
+        property_set("vendor.wifi.direct.interface", "p2p-dev-wlan0");
+    } else {
+        property_set("vendor.wifi.direct.interface", "p2p0");
+    }
     if (p2p_ifaces_.empty()) {
         return {std::vector<std::string>(), ndk::ScopedAStatus::ok()};
     }
