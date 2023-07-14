@@ -39,6 +39,7 @@ cc_defaults {
         "libhidlbase",
         "liblog",
         "libutils",
+        "librkwifi-ctrl",
     ],
     static_libs: [
         "android.hardware.bluetooth-async",
@@ -59,6 +60,9 @@ cc_library {
     defaults: [
         "hidl_defaults",
         "android.hardware.bluetooth@1.0-defaults",
+    ],
+    shared_libs: [
+        "librkwifi-ctrl",
     ],
     cflags: [
         "-DBT_FUZZER",

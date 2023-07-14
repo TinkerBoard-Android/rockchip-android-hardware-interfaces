@@ -54,6 +54,8 @@ cc_fuzz {
         "libbt-vendor-fuzz",
         "liblog",
         "libutils",
+        "librkwifi-ctrl",
+
     ],
     fuzz_config: {
         cc: [
