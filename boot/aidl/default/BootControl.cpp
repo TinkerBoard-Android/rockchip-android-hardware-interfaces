@@ -29,16 +29,19 @@ BootControl::BootControl() {
 }
 
 ScopedAStatus BootControl::getActiveBootSlot(int32_t* _aidl_return) {
+    LOG(INFO) <<"Info rk_boot_aidl BootControl::getActiveBootSlot ";
     *_aidl_return = impl_.GetActiveBootSlot();
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus BootControl::getCurrentSlot(int32_t* _aidl_return) {
+    LOG(INFO) <<"Info rk_boot_aidl BootControl::getCurrentSlot ";
     *_aidl_return = impl_.GetCurrentSlot();
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus BootControl::getNumberSlots(int32_t* _aidl_return) {
+    LOG(INFO) <<"Info rk_boot_aidl BootControl::getNumberSlots ";
     *_aidl_return = impl_.GetNumberSlots();
     return ScopedAStatus::ok();
 }
@@ -78,11 +81,13 @@ static constexpr HIDLMergeStatus ToHIDLMergeStatus(MergeStatus status) {
 }
 
 ScopedAStatus BootControl::getSnapshotMergeStatus(MergeStatus* _aidl_return) {
+    LOG(INFO) <<"Info rk_boot_aidl BootControl::getSnapshotMergeStatus ";
     *_aidl_return = ToAIDLMergeStatus(impl_.GetSnapshotMergeStatus());
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus BootControl::getSuffix(int32_t in_slot, std::string* _aidl_return) {
+    LOG(INFO) <<"Info rk_boot_aidl BootControl::getSuffix ";
     if (!impl_.IsValidSlot(in_slot)) {
         // Old HIDL hal returns empty string for invalid slots. We should maintain this behavior in
         // AIDL for compatibility.
@@ -94,6 +99,7 @@ ScopedAStatus BootControl::getSuffix(int32_t in_slot, std::string* _aidl_return)
 }
 
 ScopedAStatus BootControl::isSlotBootable(int32_t in_slot, bool* _aidl_return) {
+    LOG(INFO) <<"Info rk_boot_aidl BootControl::isSlotBootable ";
     if (!impl_.IsValidSlot(in_slot)) {
         return ScopedAStatus::fromServiceSpecificErrorWithMessage(
                 INVALID_SLOT, (std::string("Invalid slot ") + std::to_string(in_slot)).c_str());
@@ -103,6 +109,7 @@ ScopedAStatus BootControl::isSlotBootable(int32_t in_slot, bool* _aidl_return) {
 }
 
 ScopedAStatus BootControl::isSlotMarkedSuccessful(int32_t in_slot, bool* _aidl_return) {
+    LOG(INFO) <<"Info rk_boot_aidl BootControl::isSlotMarkedSuccessful ";
     if (!impl_.IsValidSlot(in_slot)) {
         return ScopedAStatus::fromServiceSpecificErrorWithMessage(
                 INVALID_SLOT, (std::string("Invalid slot ") + std::to_string(in_slot)).c_str());
@@ -112,38 +119,45 @@ ScopedAStatus BootControl::isSlotMarkedSuccessful(int32_t in_slot, bool* _aidl_r
 }
 
 ScopedAStatus BootControl::markBootSuccessful() {
+    LOG(INFO) <<"Info rk_boot_aidl BootControl::markBootSuccessful ";
     if (!impl_.MarkBootSuccessful()) {
-        return ScopedAStatus::fromServiceSpecificErrorWithMessage(COMMAND_FAILED,
-                                                                  "Operation failed");
+		/*zero is okay*/
+		return ScopedAStatus::ok();
     }
-    return ScopedAStatus::ok();
+    return ScopedAStatus::fromServiceSpecificErrorWithMessage(COMMAND_FAILED,
+                                                                  "Operation failed");
 }
 
 ScopedAStatus BootControl::setActiveBootSlot(int32_t in_slot) {
+    LOG(INFO) <<"Info rk_boot_aidl BootControl::setActiveBootSlot in_slot is " <<in_slot ;
     if (!impl_.IsValidSlot(in_slot)) {
         return ScopedAStatus::fromServiceSpecificErrorWithMessage(
                 INVALID_SLOT, (std::string("Invalid slot ") + std::to_string(in_slot)).c_str());
     }
     if (!impl_.SetActiveBootSlot(in_slot)) {
-        return ScopedAStatus::fromServiceSpecificErrorWithMessage(COMMAND_FAILED,
-                                                                  "Operation failed");
+		/*zero is okay*/
+		return ScopedAStatus::ok();
     }
-    return ScopedAStatus::ok();
+    return ScopedAStatus::fromServiceSpecificErrorWithMessage(COMMAND_FAILED,
+                                                                  "Operation failed");
 }
 
 ScopedAStatus BootControl::setSlotAsUnbootable(int32_t in_slot) {
+    LOG(INFO) <<"Info rk_boot_aidl BootControl::setSlotAsUnbootable ";
     if (!impl_.IsValidSlot(in_slot)) {
         return ScopedAStatus::fromServiceSpecificErrorWithMessage(
                 INVALID_SLOT, (std::string("Invalid slot ") + std::to_string(in_slot)).c_str());
     }
     if (!impl_.SetSlotAsUnbootable(in_slot)) {
-        return ScopedAStatus::fromServiceSpecificErrorWithMessage(COMMAND_FAILED,
-                                                                  "Operation failed");
+		/*zero is okay*/
+		return ScopedAStatus::ok();
     }
-    return ScopedAStatus::ok();
+    return ScopedAStatus::fromServiceSpecificErrorWithMessage(COMMAND_FAILED,
+                                                                  "Operation failed");
 }
 
 ScopedAStatus BootControl::setSnapshotMergeStatus(MergeStatus in_status) {
+    LOG(INFO) <<"Info rk_boot_aidl BootControl::setSnapshotMergeStatus ";
     if (!impl_.SetSnapshotMergeStatus(ToHIDLMergeStatus(in_status))) {
         return ScopedAStatus::fromServiceSpecificErrorWithMessage(COMMAND_FAILED,
                                                                   "Operation failed");

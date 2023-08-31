@@ -17,7 +17,8 @@
 #pragma once
 
 #include <aidl/android/hardware/boot/BnBootControl.h>
-#include <libboot_control/libboot_control.h>
+//#include <libboot_control/libboot_control.h>
+#include "rk_boot_control.h"
 
 namespace aidl::android::hardware::boot {
 
