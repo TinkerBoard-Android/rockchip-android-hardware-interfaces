@@ -203,7 +203,7 @@ bool VendorInterface::Open(InitializeCompleteCallback initialize_complete_cb,
                            PacketReadCallback sco_cb,
                            PacketReadCallback iso_cb) {
   {
-    std::unique_lock<std::mutex> guard(vendor_mutex_);
+    //std::unique_lock<std::mutex> guard(vendor_mutex_);
     if (vstate == VENDOR_STATE_OPENED) {
       ALOGW("VendorInterface opened!");
       return true;
@@ -305,6 +305,9 @@ bool VendorInterface::Open(InitializeCompleteCallback initialize_complete_cb,
       hci_ = mct_hci;
     }
 
+    vstate = VENDOR_STATE_OPENED;
+    ALOGI("%s: VendorInterface::Open done!!!", __func__);
+
   // Initially, the power management is off.
     lpm_wake_deasserted = true;
 
@@ -312,8 +315,7 @@ bool VendorInterface::Open(InitializeCompleteCallback initialize_complete_cb,
     firmware_startup_timer_ = new FirmwareStartupTimer();
     lib_interface_->op(BT_VND_OP_FW_CFG, nullptr);
 
-    vstate = VENDOR_STATE_OPENED;
-    ALOGI("%s: VendorInterface::Open done!!!", __func__);
+
   }  // vendor_mutex_ done
   return true;
 }
@@ -375,7 +377,7 @@ size_t VendorInterface::Send(uint8_t type, const uint8_t* data, size_t length) {
       ALOGW("VendorInterface is not open yet(%d)!", vstate);
       return 0;
     }
-    ALOGI("%s: VendorInterface::Send", __func__);
+    ALOGV("%s: VendorInterface::Send", __func__);
 
     if (lib_interface_ == nullptr) {
       ALOGE("lib_interface_ is null");
