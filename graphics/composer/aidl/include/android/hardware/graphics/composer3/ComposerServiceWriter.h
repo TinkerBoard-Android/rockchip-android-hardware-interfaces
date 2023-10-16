@@ -99,8 +99,6 @@ class ComposerServiceWriter {
                 layer.layer = layers[i];
                 layer.fence = std::move(releaseFences[i]);
                 releaseFencesCommand.layers.emplace_back(std::move(layer));
-            } else {
-                LOG(WARNING) << __func__ << ": invalid release fence " << releaseFences[i].get();
             }
         }
         mCommandsResults.emplace_back(std::move(releaseFencesCommand));
