@@ -51,3 +51,10 @@ cc_binary {
     init_rc: ["android.hardware.boot-service.default.rc"],
     vendor: true,
 }
+
+cc_binary {
+    name: "android.hardware.boot-service.default_recovery",
+    defaults: ["android.hardware.boot-service_common"],
+    init_rc: ["android.hardware.boot-service.default_recovery.rc"],
+    recovery: true,
+}
