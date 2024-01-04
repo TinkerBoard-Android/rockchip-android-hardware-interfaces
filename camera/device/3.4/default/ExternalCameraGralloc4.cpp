@@ -17,6 +17,7 @@
 #define LOG_TAG "ExCamGraBuf"
 //#define LOG_NDEBUG 0
 #include <log/log.h>
+#include <cutils/properties.h>
 #include <utils/threads.h>
 #include <utils/Log.h>
 #include <ui/GraphicBufferAllocator.h>
@@ -125,12 +126,18 @@ static inline IMapper::Rect sGralloc4Rect(const Rect& rect) {
 static inline void sBufferDescriptorInfo(std::string name, uint32_t width, uint32_t height,
                                          PixelFormat format, uint32_t layerCount, uint64_t usage,
                                          IMapper::BufferDescriptorInfo* outDescriptorInfo) {
+    char value[PROPERTY_VALUE_MAX];
     outDescriptorInfo->name = name;
     outDescriptorInfo->width = width;
     outDescriptorInfo->height = height;
     outDescriptorInfo->layerCount = layerCount;
     outDescriptorInfo->format = static_cast<hardware::graphics::common::V1_2::PixelFormat>(format);
-    outDescriptorInfo->usage = usage;
+    property_get("ro.product.name", value, "0");
+    if (0 == strcmp("Tinker_Board_3N", value)) {
+        outDescriptorInfo->usage = RK_GRALLOC_USAGE_RGA_ACCESS|usage;
+    } else {
+        outDescriptorInfo->usage = usage;
+    }
     outDescriptorInfo->reservedSize = 0;
 }
 
