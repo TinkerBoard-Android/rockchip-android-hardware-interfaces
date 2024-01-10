@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2016 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef ANDROID_HARDWARE_GNSS_V2_0_GNSSCONFIGURATION_H
-#define ANDROID_HARDWARE_GNSS_V2_0_GNSSCONFIGURATION_H
+
+#ifndef android_hardware_gnss_V2_0_GnssConfiguration_H_
+#define android_hardware_gnss_V2_0_GnssConfiguration_H_
 
 #include <android/hardware/gnss/2.0/IGnssConfiguration.h>
-#include <hidl/MQDescriptor.h>
+#include <hardware/gps.h>
 #include <hidl/Status.h>
 
 namespace android {
@@ -27,23 +28,30 @@ namespace gnss {
 namespace V2_0 {
 namespace implementation {
 
-using ::android::sp;
-using ::android::hardware::hidl_array;
-using ::android::hardware::hidl_memory;
-using ::android::hardware::hidl_string;
-using ::android::hardware::hidl_vec;
 using ::android::hardware::Return;
 using ::android::hardware::Void;
+using ::android::hardware::hidl_vec;
+using ::android::hardware::hidl_string;
+using ::android::sp;
 
+/*
+ * Interface for passing GNSS configuration info from platform to HAL.
+ */
 struct GnssConfiguration : public IGnssConfiguration {
-    // Methods from ::android::hardware::gnss::V1_0::IGnssConfiguration follow.
-    Return<bool> setSuplEs(bool enabled) override;
+    GnssConfiguration(const GnssConfigurationInterface* gnssConfigIface);
+        GnssConfiguration();
+
+    /*
+     * Methods from ::android::hardware::gnss::V1_0::IGnssConfiguration follow.
+     * These declarations were generated from IGnssConfiguration.hal.
+     */
     Return<bool> setSuplVersion(uint32_t version) override;
-    Return<bool> setSuplMode(hidl_bitfield<SuplMode> mode) override;
-    Return<bool> setGpsLock(hidl_bitfield<GpsLock> lock) override;
-    Return<bool> setLppProfile(hidl_bitfield<LppProfile> lppProfile) override;
-    Return<bool> setGlonassPositioningProtocol(hidl_bitfield<GlonassPosProtocol> protocol) override;
+    Return<bool> setSuplMode(uint8_t mode) override;
+    Return<bool> setSuplEs(bool enabled) override;
+    Return<bool> setLppProfile(uint8_t lppProfile) override;
+    Return<bool> setGlonassPositioningProtocol(uint8_t protocol) override;
     Return<bool> setEmergencySuplPdn(bool enable) override;
+    Return<bool> setGpsLock(uint8_t lock) override;
 
     // Methods from ::android::hardware::gnss::V1_1::IGnssConfiguration follow.
     Return<bool> setBlacklist(
@@ -51,6 +59,10 @@ struct GnssConfiguration : public IGnssConfiguration {
 
     // Methods from ::android::hardware::gnss::V2_0::IGnssConfiguration follow.
     Return<bool> setEsExtensionSec(uint32_t emergencyExtensionSeconds) override;
+
+
+ private:
+    const GnssConfigurationInterface* mGnssConfigIface = nullptr;
 };
 
 }  // namespace implementation
@@ -59,4 +71,4 @@ struct GnssConfiguration : public IGnssConfiguration {
 }  // namespace hardware
 }  // namespace android
 
-#endif  // ANDROID_HARDWARE_GNSS_V2_0_GNSSCONFIGURATION_H
+#endif  // android_hardware_gnss_V2_0_GnssConfiguration_H_

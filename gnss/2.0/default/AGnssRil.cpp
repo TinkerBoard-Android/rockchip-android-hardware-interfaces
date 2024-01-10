@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2016 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "AGnssRil"
+#define LOG_TAG "GnssHAL_AGnssRilInterface"
 
 #include "AGnssRil.h"
-#include <log/log.h>
 
 namespace android {
 namespace hardware {
@@ -25,30 +24,125 @@ namespace gnss {
 namespace V2_0 {
 namespace implementation {
 
-// Methods from V1_0::IAGnssRil follow.
-Return<void> AGnssRil::setCallback(const sp<V1_0::IAGnssRilCallback>&) {
-    // TODO implement
+std::vector<std::unique_ptr<ThreadFuncArgs>> AGnssRil::sThreadFuncArgsList;
+sp<V1_0::IAGnssRilCallback> AGnssRil::sAGnssRilCbIface = nullptr;
+//bool AGnssRil::sInterfaceExists = false;
+
+AGpsRilCallbacks AGnssRil::sAGnssRilCb = {
+    .request_setid = AGnssRil::requestSetId,
+    .request_refloc = AGnssRil::requestRefLoc,
+    .create_thread_cb = AGnssRil::createThreadCb
+};
+
+AGnssRil::AGnssRil(const AGpsRilInterface* aGpsRilIface) : mAGnssRilIface(aGpsRilIface) {
+    /* Error out if an instance of the interface already exists. */
+    //LOG_ALWAYS_FATAL_IF(sInterfaceExists);
+    //sInterfaceExists = true;
+}
+
+AGnssRil::~AGnssRil() {
+    sThreadFuncArgsList.clear();
+    //sInterfaceExists = false;
+}
+
+void AGnssRil::requestSetId(uint32_t flags) {
+    if (sAGnssRilCbIface == nullptr) {
+        ALOGE("%s: AGNSSRil Callback Interface configured incorrectly", __func__);
+        return;
+    }
+
+    auto ret = sAGnssRilCbIface->requestSetIdCb(flags);
+    if (!ret.isOk()) {
+        ALOGE("%s: Unable to invoke callback", __func__);
+    }
+}
+
+void AGnssRil::requestRefLoc(uint32_t /*flags*/) {
+    if (sAGnssRilCbIface == nullptr) {
+        ALOGE("%s: AGNSSRil Callback Interface configured incorrectly", __func__);
+        return;
+    }
+
+    auto ret = sAGnssRilCbIface->requestRefLocCb();
+    if (!ret.isOk()) {
+        ALOGE("%s: Unable to invoke callback", __func__);
+    }
+}
+
+pthread_t AGnssRil::createThreadCb(const char* name, void (*start)(void*), void* arg) {
+    return createPthread(name, start, arg, &sThreadFuncArgsList);
+}
+
+// Methods from ::android::hardware::gnss::V1_0::IAGnssRil follow.
+Return<void> AGnssRil::setCallback(const sp<V1_0::IAGnssRilCallback>& callback)  {
+    if (mAGnssRilIface == nullptr) {
+        ALOGE("%s: AGnssRil interface is unavailable", __func__);
+        return Void();
+    }
+
+    sAGnssRilCbIface = callback;
+
+    mAGnssRilIface->init(&sAGnssRilCb);
     return Void();
 }
 
-Return<void> AGnssRil::setRefLocation(const V1_0::IAGnssRil::AGnssRefLocation&) {
-    // TODO implement
+Return<void> AGnssRil::setRefLocation(const V1_0::IAGnssRil::AGnssRefLocation& aGnssRefLocation)  {
+    if (mAGnssRilIface == nullptr) {
+        ALOGE("%s: AGnssRil interface is unavailable", __func__);
+        return Void();
+    }
+
+    AGpsRefLocation aGnssRefloc;
+    aGnssRefloc.type = static_cast<uint16_t>(aGnssRefLocation.type);
+
+    auto& cellID = aGnssRefLocation.cellID;
+    aGnssRefloc.u.cellID = {
+        .type = static_cast<uint16_t>(cellID.type),
+        .mcc = cellID.mcc,
+        .mnc = cellID.mnc,
+        .lac = cellID.lac,
+        .cid = cellID.cid,
+        .tac = cellID.tac,
+        .pcid = cellID.pcid
+    };
+
+    mAGnssRilIface->set_ref_location(&aGnssRefloc, sizeof(aGnssRefloc));
     return Void();
 }
 
-Return<bool> AGnssRil::setSetId(V1_0::IAGnssRil::SetIDType, const hidl_string&) {
-    // TODO implement
-    return bool{};
+Return<bool> AGnssRil::setSetId(V1_0::IAGnssRil::SetIDType type, const hidl_string& setid)  {
+    if (mAGnssRilIface == nullptr) {
+        ALOGE("%s: AGnssRil interface is unavailable", __func__);
+        return false;
+    }
+
+    mAGnssRilIface->set_set_id(static_cast<uint16_t>(type), setid.c_str());
+    return true;
 }
 
-Return<bool> AGnssRil::updateNetworkState(bool, V1_0::IAGnssRil::NetworkType, bool) {
-    // TODO implement
-    return bool{};
+Return<bool> AGnssRil::updateNetworkState(bool connected,
+                                          V1_0::IAGnssRil::NetworkType type,
+                                          bool roaming) {
+    if (mAGnssRilIface == nullptr) {
+        ALOGE("%s: AGnssRil interface is unavailable", __func__);
+        return false;
+    }
+
+    mAGnssRilIface->update_network_state(connected,
+                                         static_cast<int>(type),
+                                         roaming,
+                                         nullptr /* extra_info */);
+    return true;
 }
 
-Return<bool> AGnssRil::updateNetworkAvailability(bool, const hidl_string&) {
-    // TODO implement
-    return bool{};
+Return<bool> AGnssRil::updateNetworkAvailability(bool available, const hidl_string& apn)  {
+    if (mAGnssRilIface == nullptr) {
+        ALOGE("%s: AGnssRil interface is unavailable", __func__);
+        return false;
+    }
+
+    mAGnssRilIface->update_network_availability(available, apn.c_str());
+    return true;
 }
 
 // Methods from ::android::hardware::gnss::V2_0::IAGnssRil follow.
@@ -57,6 +151,7 @@ Return<bool> AGnssRil::updateNetworkState_2_0(
     ALOGD("updateNetworkState_2_0 networkAttributes: %s", toString(attributes).c_str());
     return true;
 }
+
 
 }  // namespace implementation
 }  // namespace V2_0

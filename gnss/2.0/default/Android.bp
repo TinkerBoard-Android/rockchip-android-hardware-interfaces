@@ -13,46 +13,63 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package {
-    // See: http://go/android-license-faq
-    // A large-scale-change added 'default_applicable_licenses' to import
-    // all of the 'license_kinds' from "hardware_interfaces_license"
-    // to get the below license kinds:
-    //   SPDX-license-identifier-Apache-2.0
-    default_applicable_licenses: ["hardware_interfaces_license"],
-}
-
-cc_binary {
-    name: "android.hardware.gnss@2.0-service",
-    init_rc: ["android.hardware.gnss@2.0-service.rc"],
-    relative_install_path: "hw",
+cc_library_shared {
+    name: "android.hardware.gnss@2.0-impl",
+    defaults: ["hidl_defaults"],
     vendor: true,
-    vintf_fragments: ["android.hardware.gnss@2.0-service.xml"],
+    relative_install_path: "hw",
     srcs: [
-        "GnssConfiguration.cpp",
-        "AGnss.cpp",
-        "AGnssRil.cpp",
+        "ThreadCreationWrapper.cpp",
         "Gnss.cpp",
-        "GnssBatching.cpp",
-        "GnssMeasurement.cpp",
-        "GnssMeasurementCorrections.cpp",
+        "GnssXtra.cpp",
+        "GnssNavigationMessage.cpp",
+        "GnssNi.cpp",
+        "GnssGeofencing.cpp",
+        "AGnssRil.cpp",
+        "AGnss.cpp",
+        "GnssDebug.cpp",
         "GnssVisibilityControl.cpp",
-        "service.cpp",
+        "GnssBatching.cpp",
+        "GnssConfiguration.cpp",
+        "GnssMeasurementCorrections.cpp",
+        "GnssMeasurement.cpp",
+        "GnssUtils.cpp",
     ],
+
     shared_libs: [
+        "liblog",
         "libhidlbase",
         "libutils",
-        "liblog",
+        "android.hardware.gnss@1.0",
+        "android.hardware.gnss@1.1",
+        "android.hardware.gnss@2.0",
         "android.hardware.gnss.measurement_corrections@1.0",
         "android.hardware.gnss.visibility_control@1.0",
-        "android.hardware.gnss@2.1",
-        "android.hardware.gnss@2.0",
-        "android.hardware.gnss@1.1",
+        "libhardware",
+    ],
+
+}
+cc_binary {
+    relative_install_path: "hw",
+    vendor: true,
+    name: "android.hardware.gnss@2.0-service",
+    defaults: ["hidl_defaults"],
+    init_rc: ["android.hardware.gnss@2.0-service.rc"],
+    vintf_fragments: ["android.hardware.gnss@2.0-service.xml"],
+    srcs: ["service.cpp"],
+
+    shared_libs: [
+        "liblog",
+        "libcutils",
+        "libdl",
+        "libbase",
+        "libutils",
+        "libhardware",
+        "libbinder",
+        "libhidlbase",
         "android.hardware.gnss@1.0",
-        "android.hardware.gnss-V3-ndk",
+        "android.hardware.gnss@1.1",
+        "android.hardware.gnss@2.0",
     ],
-    static_libs: [
-        "android.hardware.gnss@common-default-lib",
-    ],
+
 }
