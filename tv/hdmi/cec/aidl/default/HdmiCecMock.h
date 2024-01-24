@@ -17,6 +17,8 @@
 #include <aidl/android/hardware/tv/hdmi/cec/BnHdmiCec.h>
 #include <algorithm>
 #include <vector>
+#include "rk_hdmi_cec.h"
+
 
 using namespace std;
 
@@ -35,8 +37,6 @@ using ::aidl::android::hardware::tv::hdmi::cec::IHdmiCecCallback;
 using ::aidl::android::hardware::tv::hdmi::cec::Result;
 using ::aidl::android::hardware::tv::hdmi::cec::SendMessageResult;
 
-#define CEC_MSG_IN_FIFO "/dev/cec_aidl_in_pipe"
-#define CEC_MSG_OUT_FIFO "/dev/cec_aidl_out_pipe"
 
 struct HdmiCecMock : public BnHdmiCec {
     HdmiCecMock();
@@ -54,37 +54,39 @@ struct HdmiCecMock : public BnHdmiCec {
     ::ndk::ScopedAStatus enableCec(bool value) override;
     ::ndk::ScopedAStatus enableSystemCecControl(bool value) override;
     void printCecMsgBuf(const char* msg_buf, int len);
+    static void eventCallback(const hdmi_event_t* event, void* /* arg */){
+        if (mCallback != nullptr && event != nullptr) {
+            if (event->type == HDMI_EVENT_CEC_MESSAGE) {
+                size_t length = std::min(event->cec.length,
+                        static_cast<size_t>(CEC_MESSAGE_BODY_MAX_LENGTH));
+                CecMessage cecMessage {
+                    .initiator = static_cast<CecLogicalAddress>(event->cec.initiator),
+                    .destination = static_cast<CecLogicalAddress>(event->cec.destination),
+                };
+                cecMessage.body.resize(length);
+                for (size_t i = 0; i < length; ++i) {
+                    cecMessage.body[i] = static_cast<uint8_t>(event->cec.body[i]);
+                }
+                mCallback->onCecMessage(cecMessage);
+            } else if (event->type == HDMI_EVENT_HOT_PLUG) {
+                /*
+                hotplug_event hotplugEvent {
+                    .connected = event->hotplug.connected > 0,
+                    .port_id = static_cast<int>(event->hotplug.port_id)
+                };
+                mCallback->onHotplugEvent(hotplugEvent);
+              */
+            }
+        }
+    }
 
-  private:
-    static void* __threadLoop(void* data);
-    void threadLoop();
-    int readMessageFromFifo(unsigned char* buf, int msgCount);
-    int sendMessageToFifo(const CecMessage& message);
-    void handleCecMessage(unsigned char* msgBuf, int length);
 
   private:
     static void serviceDied(void* cookie);
-    std::shared_ptr<IHdmiCecCallback> mCallback;
+    static std::shared_ptr<IHdmiCecCallback> mCallback;
 
-    // Variables for the virtual cec hal impl
-    uint16_t mPhysicalAddress = 0xFFFF;
-    vector<CecLogicalAddress> mLogicalAddresses;
-    int32_t mCecVersion = 0x06;
-    uint32_t mCecVendorId = 0x01;
-
-    // CEC Option value
-    bool mOptionWakeUp = 0;
-    bool mOptionEnableCec = 0;
-    bool mOptionSystemCecControl = 0;
-    int mOptionLanguage;
-
-    // Testing variables
-    // Input file descriptor
-    int mInputFile;
-    // Output file descriptor
-    int mOutputFile;
-    bool mCecThreadRun = true;
-    pthread_t mThreadId = 0;
+    //Variables for RK implementation
+    struct hdmi_cec_context_t rkdev;
 
     ::ndk::ScopedAIBinder_DeathRecipient mDeathRecipient;
 };
