@@ -206,7 +206,7 @@ void HdmiCecMock::printCecMsgBuf(const char* msg_buf, int len) {
 
 
 HdmiCecMock::HdmiCecMock() {
-    ALOGD("[RK_HDMI_CEC_imp_aidl] Opening a RK CEC HAL AIDL Implementation.");
+    ALOGE("[RK_HDMI_CEC_imp_aidl] Opening a RK CEC HAL AIDL Implementation.");
 
 	rk_hdmi_cec_init(&rkdev);
 

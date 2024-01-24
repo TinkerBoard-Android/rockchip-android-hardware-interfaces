@@ -18,6 +18,8 @@
 #include <android-base/logging.h>
 #include <fcntl.h>
 #include <utils/Log.h>
+#include <hardware/hardware.h>
+#include <hardware/hdmi_cec.h>
 
 #include "HdmiConnectionMock.h"
 
@@ -30,30 +32,58 @@ namespace hdmi {
 namespace connection {
 namespace implementation {
 
+std::shared_ptr<IHdmiConnectionCallback> HdmiConnectionMock::mCallback = nullptr;
+
 void HdmiConnectionMock::serviceDied(void* cookie) {
-    ALOGE("HdmiConnectionMock died");
+    ALOGE("[RK_HDMI_CEC_imp_aidl connection] HdmiConnectionMock died");
+    ALOGD("[RK_HDMI_CEC_imp_aidl connection] %s.", __FUNCTION__);
+
     auto hdmi = static_cast<HdmiConnectionMock*>(cookie);
-    hdmi->mHdmiThreadRun = false;
+	mCallback = nullptr;
+	rk_hdmi_connection_destroy(&(hdmi->rkdev));
+
 }
 
 ScopedAStatus HdmiConnectionMock::getPortInfo(std::vector<HdmiPortInfo>* _aidl_return) {
+    struct hdmi_port_info* legacyPorts;
+    int numPorts;
+
+    ALOGD("[RK_HDMI_CEC_imp_aidl connection] %s.", __FUNCTION__);
+
+    //hidl_vec<HdmiPortInfo> portInfos;
+    hdmi_connection_get_port_info(&rkdev, &legacyPorts, &numPorts);
+    //portInfos.resize(numPorts);
+	mPortInfos.resize(numPorts);
+    for (int i = 0; i < numPorts; ++i) {
+        mPortInfos[i] = {
+            .type = static_cast<HdmiPortType>(legacyPorts[i].type),
+            .portId = static_cast<int32_t>(legacyPorts[i].port_id),
+            .cecSupported = legacyPorts[i].cec_supported != 0,
+            .arcSupported = legacyPorts[i].arc_supported != 0,
+            .eArcSupported = false,
+            .physicalAddress = legacyPorts[i].physical_address
+        };
+    }
+
+    mTotalPorts = numPorts;
+
     *_aidl_return = mPortInfos;
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus HdmiConnectionMock::isConnected(int32_t portId, bool* _aidl_return) {
+    ALOGD("[RK_HDMI_CEC_imp_aidl connection] %s.", __FUNCTION__);
+
+	*_aidl_return = hdmi_connection_is_connected(&rkdev, portId) > 0;
     // Maintain port connection status and update on hotplug event
-    if (portId <= mTotalPorts && portId >= 1) {
-        *_aidl_return = mPortConnectionStatus.at(portId - 1);
-    } else {
-        *_aidl_return = false;
-    }
 
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus HdmiConnectionMock::setCallback(
         const std::shared_ptr<IHdmiConnectionCallback>& callback) {
+    ALOGD("[RK_HDMI_CEC_imp_aidl connection] %s.", __FUNCTION__);
+
     if (mCallback != nullptr) {
         mCallback = nullptr;
     }
@@ -62,54 +92,32 @@ ScopedAStatus HdmiConnectionMock::setCallback(
         mCallback = callback;
         AIBinder_linkToDeath(this->asBinder().get(), mDeathRecipient.get(), 0 /* cookie */);
 
-        mInputFile = open(HDMI_MSG_IN_FIFO, O_RDWR | O_CLOEXEC);
-        pthread_create(&mThreadId, NULL, __threadLoop, this);
-        pthread_setname_np(mThreadId, "hdmi_loop");
+        hdmi_connection_register_event_callback(&rkdev, eventCallback, nullptr);
     }
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus HdmiConnectionMock::setHpdSignal(HpdSignal signal, int32_t portId) {
+    ALOGD("[RK_HDMI_CEC_imp_aidl connection] %s.", __FUNCTION__);
+
     if (portId > mTotalPorts || portId < 1) {
         return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
-    if (!mHdmiThreadRun) {
-        return ScopedAStatus::fromServiceSpecificError(
-                static_cast<int32_t>(Result::FAILURE_INVALID_STATE));
-    }
-    mHpdSignal.at(portId - 1) = signal;
+
+	hdmi_connection_set_phd_signal(&rkdev, portId, static_cast<int>(signal));
+	
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus HdmiConnectionMock::getHpdSignal(int32_t portId, HpdSignal* _aidl_return) {
+    ALOGD("[RK_HDMI_CEC_imp_aidl connection] %s.", __FUNCTION__);
     if (portId > mTotalPorts || portId < 1) {
         return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
-    *_aidl_return = mHpdSignal.at(portId - 1);
+    *_aidl_return = static_cast<HpdSignal>(hdmi_connection_get_phd_signal(&rkdev, portId));
     return ScopedAStatus::ok();
 }
 
-void* HdmiConnectionMock::__threadLoop(void* user) {
-    HdmiConnectionMock* const self = static_cast<HdmiConnectionMock*>(user);
-    self->threadLoop();
-    return 0;
-}
-
-int HdmiConnectionMock::readMessageFromFifo(unsigned char* buf, int msgCount) {
-    if (msgCount <= 0 || !buf) {
-        return 0;
-    }
-
-    int ret = -1;
-    // Maybe blocked at driver
-    ret = read(mInputFile, buf, msgCount);
-    if (ret < 0) {
-        ALOGE("[halimp_aidl] read :%s failed, ret:%d\n", HDMI_MSG_IN_FIFO, ret);
-        return -1;
-    }
-
-    return ret;
-}
 
 void HdmiConnectionMock::printEventBuf(const char* msg_buf, int len) {
     int i, size = 0;
@@ -124,75 +132,24 @@ void HdmiConnectionMock::printEventBuf(const char* msg_buf, int len) {
     ALOGD("[halimp_aidl] %s, msg:%.*s", __FUNCTION__, size, buf);
 }
 
-void HdmiConnectionMock::handleHotplugMessage(unsigned char* msgBuf) {
-    bool connected = ((msgBuf[3]) & 0xf) > 0;
-    int32_t portId = static_cast<uint32_t>(msgBuf[0] & 0xf);
-
-    if (portId > static_cast<int32_t>(mPortInfos.size()) || portId < 1) {
-        ALOGD("[halimp_aidl] ignore hot plug message, id %x does not exist", portId);
-        return;
-    }
-
-    ALOGD("[halimp_aidl] hot plug port id %x, is connected %x", (msgBuf[0] & 0xf),
-          (msgBuf[3] & 0xf));
-    mPortConnectionStatus.at(portId - 1) = connected;
-    if (mPortInfos.at(portId - 1).type == HdmiPortType::OUTPUT) {
-        mPhysicalAddress = (connected ? 0xffff : ((msgBuf[1] << 8) | (msgBuf[2])));
-        mPortInfos.at(portId - 1).physicalAddress = mPhysicalAddress;
-        ALOGD("[halimp_aidl] hot plug physical address %x", mPhysicalAddress);
-    }
-
-    if (mCallback != nullptr) {
-        mCallback->onHotplugEvent(connected, portId);
-    }
-}
-
-void HdmiConnectionMock::threadLoop() {
-    ALOGD("[halimp_aidl] threadLoop start.");
-    unsigned char msgBuf[MESSAGE_BODY_MAX_LENGTH];
-    int r = -1;
-
-    // Open the input pipe
-    while (mInputFile < 0) {
-        usleep(1000 * 1000);
-        mInputFile = open(HDMI_MSG_IN_FIFO, O_RDONLY | O_CLOEXEC);
-    }
-    ALOGD("[halimp_aidl] file open ok, fd = %d.", mInputFile);
-
-    while (mHdmiThreadRun) {
-        memset(msgBuf, 0, sizeof(msgBuf));
-        // Try to get a message from dev.
-        // echo -n -e '\x04\x83' >> /dev/cec
-        r = readMessageFromFifo(msgBuf, MESSAGE_BODY_MAX_LENGTH);
-        if (r <= 1) {
-            // Ignore received ping messages
-            continue;
-        }
-
-        printEventBuf((const char*)msgBuf, r);
-
-        if (((msgBuf[0] >> 4) & 0xf) == 0xf) {
-            handleHotplugMessage(msgBuf);
-        }
-    }
-
-    ALOGD("[halimp_aidl] thread end.");
-}
 
 HdmiConnectionMock::HdmiConnectionMock() {
-    ALOGE("[halimp_aidl] Opening a virtual HDMI HAL for testing and virtual machine.");
+    ALOGE("[RK_HDMI_CEC_imp_aidl connection] Opening a RK HDMI Connection HAL AIDL Implementation.");
     mCallback = nullptr;
+    rk_hdmi_connection_init(&rkdev);
+
     mPortInfos.resize(mTotalPorts);
-    mPortConnectionStatus.resize(mTotalPorts);
-    mHpdSignal.resize(mTotalPorts);
+    //mPortConnectionStatus.resize(mTotalPorts);
+    //mHpdSignal.resize(mTotalPorts);
     mPortInfos[0] = {.type = HdmiPortType::OUTPUT,
                      .portId = static_cast<uint32_t>(1),
                      .cecSupported = true,
                      .arcSupported = false,
                      .eArcSupported = false,
                      .physicalAddress = mPhysicalAddress};
-    mPortConnectionStatus[0] = false;
-    mHpdSignal[0] = HpdSignal::HDMI_HPD_PHYSICAL;
+    //mPortConnectionStatus[0] = false;
+    //mHpdSignal[0] = HpdSignal::HDMI_HPD_PHYSICAL;
+
     mDeathRecipient = ndk::ScopedAIBinder_DeathRecipient(AIBinder_DeathRecipient_new(serviceDied));
 }
 
