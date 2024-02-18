@@ -80,6 +80,10 @@ func init() {
 	android.RegisterModuleType("vintf_compatibility_matrix", vintfCompatibilityMatrixFactory)
 }
 
+func VintfCompatibilityMatrixFactory() android.Module {
+	return vintfCompatibilityMatrixFactory()
+}
+
 func vintfCompatibilityMatrixFactory() android.Module {
 	g := &vintfCompatibilityMatrixRule{}
 	g.AddProperties(&g.properties)
