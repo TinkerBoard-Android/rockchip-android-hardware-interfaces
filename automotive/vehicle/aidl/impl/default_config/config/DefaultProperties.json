@@ -1646,7 +1646,7 @@
             "property": "VehicleProperty::CURRENT_GEAR",
             "defaultValue": {
                 "int32Values": [
-                    "VehicleGear::GEAR_PARK"
+                    "VehicleGear::GEAR_NEUTRAL"
                 ]
             },
             "configArray": [
@@ -2427,7 +2427,7 @@
             "property": "VehicleProperty::GEAR_SELECTION",
             "defaultValue": {
                 "int32Values": [
-                    "VehicleGear::GEAR_PARK"
+                    "VehicleGear::GEAR_NEUTRAL"
                 ]
             },
             "configArray": [
