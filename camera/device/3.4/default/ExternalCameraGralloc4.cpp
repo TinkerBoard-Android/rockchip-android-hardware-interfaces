@@ -132,8 +132,8 @@ static inline void sBufferDescriptorInfo(std::string name, uint32_t width, uint3
     outDescriptorInfo->height = height;
     outDescriptorInfo->layerCount = layerCount;
     outDescriptorInfo->format = static_cast<hardware::graphics::common::V1_2::PixelFormat>(format);
-    property_get("ro.product.name", value, "0");
-    if (0 == strcmp("Tinker_Board_3N", value)) {
+    property_get("ro.soc.model", value, "0");
+    if (0 == strcmp("RK3568", value) || 0 == strcmp("RK3566", value) || 0 == strcmp("RK3588", value)) {
         outDescriptorInfo->usage = RK_GRALLOC_USAGE_RGA_ACCESS|usage;
     } else {
         outDescriptorInfo->usage = usage;
