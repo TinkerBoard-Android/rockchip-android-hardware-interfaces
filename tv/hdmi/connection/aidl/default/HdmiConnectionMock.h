@@ -92,7 +92,8 @@ struct HdmiConnectionMock : public BnHdmiConnection {
     //std::vector<bool> mPortConnectionStatus;
 
     // Port configuration
-    uint16_t mPhysicalAddress = 0xFFFF;
+    //uint16_t mPhysicalAddress = 0xFFFF;
+    //will update by hdmi HAL(or KERENL) config
     int mTotalPorts = 1;
 
     // HPD Signal being used

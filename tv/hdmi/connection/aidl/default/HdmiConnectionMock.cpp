@@ -35,8 +35,8 @@ namespace implementation {
 std::shared_ptr<IHdmiConnectionCallback> HdmiConnectionMock::mCallback = nullptr;
 
 void HdmiConnectionMock::serviceDied(void* cookie) {
-    ALOGE("[RK_HDMI_CEC_imp_aidl connection] HdmiConnectionMock died");
-    ALOGD("[RK_HDMI_CEC_imp_aidl connection] %s.", __FUNCTION__);
+    ALOGE("HdmiConnectionMock died");
+    ALOGD("%s.", __FUNCTION__);
 
     auto hdmi = static_cast<HdmiConnectionMock*>(cookie);
 	mCallback = nullptr;
@@ -47,32 +47,28 @@ void HdmiConnectionMock::serviceDied(void* cookie) {
 ScopedAStatus HdmiConnectionMock::getPortInfo(std::vector<HdmiPortInfo>* _aidl_return) {
     struct hdmi_port_info* legacyPorts;
     int numPorts;
-
-    ALOGD("[RK_HDMI_CEC_imp_aidl connection] %s.", __FUNCTION__);
-
-    //hidl_vec<HdmiPortInfo> portInfos;
     hdmi_connection_get_port_info(&rkdev, &legacyPorts, &numPorts);
-    //portInfos.resize(numPorts);
-	mPortInfos.resize(numPorts);
+    ALOGD("%s,numPorts:%d", __FUNCTION__, numPorts);
+    mPortInfos.resize(numPorts);
     for (int i = 0; i < numPorts; ++i) {
+        // ALOGD("port %d type:%u,id:%d,cecSupported:%d,arcSupported:%d,physicalAddress:0x%04x",
+        //     i, legacyPorts[i].type, legacyPorts[i].port_id, legacyPorts[i].cec_supported, legacyPorts[i].arc_supported, legacyPorts[i].physical_address);
         mPortInfos[i] = {
-            .type = static_cast<HdmiPortType>(legacyPorts[i].type),
-            .portId = static_cast<int32_t>(legacyPorts[i].port_id),
-            .cecSupported = legacyPorts[i].cec_supported != 0,
-            .arcSupported = legacyPorts[i].arc_supported != 0,
-            .eArcSupported = false,
-            .physicalAddress = legacyPorts[i].physical_address
+        .type = static_cast<HdmiPortType>(legacyPorts[i].type),
+        .portId = (legacyPorts[i].port_id),
+        .cecSupported = legacyPorts[i].cec_supported != 0,
+        .arcSupported = legacyPorts[i].arc_supported != 0,
+        .eArcSupported = false,
+        .physicalAddress = legacyPorts[i].physical_address
         };
     }
-
     mTotalPorts = numPorts;
-
     *_aidl_return = mPortInfos;
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus HdmiConnectionMock::isConnected(int32_t portId, bool* _aidl_return) {
-    ALOGD("[RK_HDMI_CEC_imp_aidl connection] %s.", __FUNCTION__);
+    ALOGD("%s.", __FUNCTION__);
 
 	*_aidl_return = hdmi_connection_is_connected(&rkdev, portId) > 0;
     // Maintain port connection status and update on hotplug event
@@ -82,7 +78,7 @@ ScopedAStatus HdmiConnectionMock::isConnected(int32_t portId, bool* _aidl_return
 
 ScopedAStatus HdmiConnectionMock::setCallback(
         const std::shared_ptr<IHdmiConnectionCallback>& callback) {
-    ALOGD("[RK_HDMI_CEC_imp_aidl connection] %s.", __FUNCTION__);
+    ALOGD("%s.", __FUNCTION__);
 
     if (mCallback != nullptr) {
         mCallback = nullptr;
@@ -98,19 +94,18 @@ ScopedAStatus HdmiConnectionMock::setCallback(
 }
 
 ScopedAStatus HdmiConnectionMock::setHpdSignal(HpdSignal signal, int32_t portId) {
-    ALOGD("[RK_HDMI_CEC_imp_aidl connection] %s.", __FUNCTION__);
+    ALOGD("%s.", __FUNCTION__);
 
     if (portId > mTotalPorts || portId < 1) {
         return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
 
 	hdmi_connection_set_phd_signal(&rkdev, portId, static_cast<int>(signal));
-	
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus HdmiConnectionMock::getHpdSignal(int32_t portId, HpdSignal* _aidl_return) {
-    ALOGD("[RK_HDMI_CEC_imp_aidl connection] %s.", __FUNCTION__);
+    ALOGD("%s.", __FUNCTION__);
     if (portId > mTotalPorts || portId < 1) {
         return ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
     }
@@ -134,19 +129,21 @@ void HdmiConnectionMock::printEventBuf(const char* msg_buf, int len) {
 
 
 HdmiConnectionMock::HdmiConnectionMock() {
-    ALOGE("[RK_HDMI_CEC_imp_aidl connection] Opening a RK HDMI Connection HAL AIDL Implementation.");
+    ALOGD("Opening a RK HDMI Connection HAL AIDL Implementation.");
     mCallback = nullptr;
     rk_hdmi_connection_init(&rkdev);
 
     mPortInfos.resize(mTotalPorts);
     //mPortConnectionStatus.resize(mTotalPorts);
     //mHpdSignal.resize(mTotalPorts);
-    mPortInfos[0] = {.type = HdmiPortType::OUTPUT,
+#if 0
+    mPortInfos[0] = { .type = HdmiPortType::OUTPUT,
                      .portId = static_cast<uint32_t>(1),
                      .cecSupported = true,
                      .arcSupported = false,
                      .eArcSupported = false,
-                     .physicalAddress = mPhysicalAddress};
+                     .physicalAddress = mPhysicalAddress };
+#endif
     //mPortConnectionStatus[0] = false;
     //mHpdSignal[0] = HpdSignal::HDMI_HPD_PHYSICAL;
 

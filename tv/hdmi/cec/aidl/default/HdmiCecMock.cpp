@@ -36,7 +36,7 @@ std::shared_ptr<IHdmiCecCallback> HdmiCecMock::mCallback = nullptr;
 
 
 void HdmiCecMock::serviceDied(void* cookie) {
-    ALOGE("RK_HDMI_CEC_imp_aidl HdmiCecMock died");
+    ALOGE("HdmiCecMock died");
 
     auto hdmiCecMock = static_cast<HdmiCecMock*>(cookie);
 	mCallback = nullptr;
@@ -44,7 +44,7 @@ void HdmiCecMock::serviceDied(void* cookie) {
 }
 
 ScopedAStatus HdmiCecMock::addLogicalAddress(CecLogicalAddress addr, Result* _aidl_return) {
-	ALOGD("[RK_HDMI_CEC_imp_aidl] %s.", __FUNCTION__);
+	ALOGD("%s.", __FUNCTION__);
 
     int ret = hdmi_cec_add_logical_address(&rkdev, static_cast<cec_logical_address_t>(addr));
     switch (ret) {
@@ -69,21 +69,21 @@ ScopedAStatus HdmiCecMock::addLogicalAddress(CecLogicalAddress addr, Result* _ai
 }
 
 ScopedAStatus HdmiCecMock::clearLogicalAddress() {
-	ALOGD("[RK_HDMI_CEC_imp_aidl] %s.", __FUNCTION__);
+	ALOGD("%s.", __FUNCTION__);
 	hdmi_cec_clear_logical_address(&rkdev);
 
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus HdmiCecMock::enableAudioReturnChannel(int32_t portId, bool enable) {
-	ALOGD("[RK_HDMI_CEC_imp_aidl] %s.", __FUNCTION__);
+	ALOGD("%s.", __FUNCTION__);
 	hdmi_cec_set_audio_return_channel(&rkdev, portId, enable ? 1 : 0);
 
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus HdmiCecMock::getCecVersion(int32_t* _aidl_return) {
-	ALOGD("[RK_HDMI_CEC_imp_aidl] %s.", __FUNCTION__);
+	ALOGD("%s.", __FUNCTION__);
     int version;
     hdmi_cec_get_version(&rkdev, &version);
 	*_aidl_return = static_cast<int32_t>(version);
@@ -92,7 +92,7 @@ ScopedAStatus HdmiCecMock::getCecVersion(int32_t* _aidl_return) {
 }
 
 ScopedAStatus HdmiCecMock::getPhysicalAddress(int32_t* _aidl_return) {
-	ALOGD("[RK_HDMI_CEC_imp_aidl] %s.", __FUNCTION__);
+	ALOGD("%s.", __FUNCTION__);
     uint16_t addr = 0xFFFF;
     int ret = hdmi_cec_get_physical_address(&rkdev, &addr);
     switch (ret) {
@@ -111,7 +111,7 @@ ScopedAStatus HdmiCecMock::getPhysicalAddress(int32_t* _aidl_return) {
 }
 
 ScopedAStatus HdmiCecMock::getVendorId(int32_t* _aidl_return) {
-	ALOGD("[RK_HDMI_CEC_imp_aidl] %s.", __FUNCTION__);
+	ALOGD("%s.", __FUNCTION__);
     uint32_t vendor_id;
     hdmi_cec_get_vendor_id(&rkdev, &vendor_id);
 	*_aidl_return = vendor_id;
@@ -120,28 +120,31 @@ ScopedAStatus HdmiCecMock::getVendorId(int32_t* _aidl_return) {
 }
 
 ScopedAStatus HdmiCecMock::sendMessage(const CecMessage& message, SendMessageResult* _aidl_return) {
-	ALOGD("[RK_HDMI_CEC_imp_aidl] %s.", __FUNCTION__);
-	if (message.body.size() == 0) {
-        *_aidl_return = SendMessageResult::NACK;
-    } else if (message.body.size() > CEC_MESSAGE_BODY_MAX_LENGTH) {
-		*_aidl_return = SendMessageResult::FAIL;
-    } else {
-        cec_message_t legacyMessage {
+    if (message.body.size() > CEC_MESSAGE_BODY_MAX_LENGTH) {
+        ALOGW("message body is too long(%zu > %d)", message.body.size(), CEC_MESSAGE_BODY_MAX_LENGTH);
+        *_aidl_return = SendMessageResult::FAIL;
+    }
+    else {
+        //ALOGD("%s %s", __FUNCTION__, message.toString().c_str());
+        cec_message_t legacyMessage{
           .initiator = static_cast<cec_logical_address_t>(message.initiator),
           .destination = static_cast<cec_logical_address_t>(message.destination),
           .length = message.body.size(),
         };
-        for (size_t i = 0; i < message.body.size(); ++i) {
-            legacyMessage.body[i] = static_cast<unsigned char>(message.body[i]);
+        if (message.body.size() > 0)
+        {
+            for (size_t i = 0; i < message.body.size(); ++i) {
+                legacyMessage.body[i] = static_cast<unsigned char>(message.body[i]);
+            }
         }
-	    *_aidl_return = static_cast<SendMessageResult>(hdmi_cec_send_message(&rkdev, &legacyMessage));
+        *_aidl_return = static_cast<SendMessageResult>(hdmi_cec_send_message(&rkdev, &legacyMessage));
     }
 
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus HdmiCecMock::setCallback(const std::shared_ptr<IHdmiCecCallback>& callback) {
-	ALOGD("[RK_HDMI_CEC_imp_aidl] %s.", __FUNCTION__);
+	ALOGD("%s.", __FUNCTION__);
     // If callback is null, mCallback is also set to null so we do not call the old callback.
     mCallback = callback;
 
@@ -154,7 +157,7 @@ ScopedAStatus HdmiCecMock::setCallback(const std::shared_ptr<IHdmiCecCallback>& 
 }
 
 ScopedAStatus HdmiCecMock::setLanguage(const std::string& language) {
-	ALOGD("[RK_HDMI_CEC_imp_aidl] %s.", __FUNCTION__);
+	ALOGD("%s.", __FUNCTION__);
     if (language.size() != 3) {
         LOG(ERROR) << "Wrong language code: expected 3 letters, but it was " << language.size()
                    << ".";
@@ -171,21 +174,21 @@ ScopedAStatus HdmiCecMock::setLanguage(const std::string& language) {
 }
 
 ScopedAStatus HdmiCecMock::enableWakeupByOtp(bool value) {
-	ALOGD("[RK_HDMI_CEC_imp_aidl] %s.", __FUNCTION__);
+	ALOGD("%s.", __FUNCTION__);
     hdmi_cec_set_option(&rkdev, HDMI_OPTION_WAKEUP, value ? 1 : 0);
 
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus HdmiCecMock::enableCec(bool value) {
-	ALOGD("[RK_HDMI_CEC_imp_aidl] %s.", __FUNCTION__);
+	ALOGD("%s.", __FUNCTION__);
     hdmi_cec_set_option(&rkdev, HDMI_OPTION_ENABLE_CEC, value ? 1 : 0);
 
     return ScopedAStatus::ok();
 }
 
 ScopedAStatus HdmiCecMock::enableSystemCecControl(bool value) {
-	ALOGD("[RK_HDMI_CEC_imp_aidl] %s.", __FUNCTION__);
+	ALOGD("%s.", __FUNCTION__);
     hdmi_cec_set_option(&rkdev, HDMI_OPTION_SYSTEM_CEC_CONTROL, value ? 1 : 0);
 
     return ScopedAStatus::ok();
@@ -206,7 +209,7 @@ void HdmiCecMock::printCecMsgBuf(const char* msg_buf, int len) {
 
 
 HdmiCecMock::HdmiCecMock() {
-    ALOGE("[RK_HDMI_CEC_imp_aidl] Opening a RK CEC HAL AIDL Implementation.");
+    ALOGD("Opening a RK CEC HAL AIDL Implementation.");
 
 	rk_hdmi_cec_init(&rkdev);
 
