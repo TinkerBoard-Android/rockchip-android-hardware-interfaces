@@ -28,6 +28,7 @@
 #include "CameraMetadata.h"
 #include "../../3.2/default/include/convert.h"
 #include "ExternalCameraDevice_3_4.h"
+#include <cutils/properties.h>
 
 #ifdef HDMI_ENABLE
 #ifdef HDMI_SUBVIDEO_ENABLE
@@ -370,6 +371,7 @@ status_t ExternalCameraDevice::initAvailableCapabilities(
 
 status_t ExternalCameraDevice::initDefaultCharsKeys(
         ::android::hardware::camera::common::V1_0::helper::CameraMetadata* metadata) {
+    char value[PROPERTY_VALUE_MAX];
     const uint8_t hardware_level = ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL_EXTERNAL;
     UPDATE(ANDROID_INFO_SUPPORTED_HARDWARE_LEVEL, &hardware_level, 1);
 
@@ -444,8 +446,14 @@ status_t ExternalCameraDevice::initDefaultCharsKeys(
     UPDATE(ANDROID_LENS_INFO_AVAILABLE_OPTICAL_STABILIZATION,
            &opticalStabilizationMode, 1);
 
-    const uint8_t facing = ANDROID_LENS_FACING_EXTERNAL;
-    UPDATE(ANDROID_LENS_FACING, &facing, 1);
+    property_get("ro.product.name", value, "0");
+    if (0 == strcmp("Sanden_CM", value) || 0 == strcmp("Sanden_VM", value)) {
+        const uint8_t facing = ANDROID_LENS_FACING_FRONT;
+        UPDATE(ANDROID_LENS_FACING, &facing, 1);
+    } else {
+        const uint8_t facing = ANDROID_LENS_FACING_EXTERNAL;
+        UPDATE(ANDROID_LENS_FACING, &facing, 1);
+    }
 
     // android.noiseReduction
     const uint8_t noiseReductionMode = ANDROID_NOISE_REDUCTION_MODE_OFF;
