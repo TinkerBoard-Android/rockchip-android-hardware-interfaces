@@ -85,7 +85,9 @@ class ComposerServiceWriter {
             presentFenceCommand.display = display;
             mCommandsResults.emplace_back(std::move(presentFenceCommand));
         } else {
-            LOG(WARNING) << __func__ << ": invalid present fence " << presentFence.get();
+            // rk code 
+            // LOG(WARNING) << __func__ << ": invalid present fence " << presentFence.get();
+            // rk code 
         }
     }
 
