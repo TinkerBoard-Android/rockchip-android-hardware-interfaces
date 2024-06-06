@@ -221,16 +221,16 @@ bool VendorInterface::Open(InitializeCompleteCallback initialize_complete_cb,
     initialize_complete_cb_ = initialize_complete_cb;
 	char vendor_lib_name[32];
     // Initialize vendor interface
-  if (wifi_type[0] == 0)
-    check_wifi_chip_type_string(wifi_type);
-  if ((0 == strncmp(wifi_type, "RTL", 3)) ||
-      (0 == strncmp(wifi_type, "SSV", 3))) { // for ssv6051 wifi + rtl8761 bt
+    if (wifi_type[0] == 0)
+        check_wifi_chip_type_string(wifi_type);
+  //if ((0 == strncmp(wifi_type, "RTL", 3)) ||
+      //(0 == strncmp(wifi_type, "SSV", 3))) { // for ssv6051 wifi + rtl8761 bt
     strcpy(vendor_lib_name, VENDOR_REALTEK_LIBRARY_NAME);
-  } else {
-    strcpy(vendor_lib_name, VENDOR_LIBRARY_NAME);
-  }
+  //} else {
+    //strcpy(vendor_lib_name, VENDOR_LIBRARY_NAME);
+  //}
 
-  ALOGD("%s: %s", __func__, vendor_lib_name);
+    ALOGD("%s: %s", __func__, vendor_lib_name);
     lib_handle_ = dlopen(vendor_lib_name, RTLD_NOW);
     if (!lib_handle_) {
       ALOGE("%s unable to open %s (%s)", __func__, VENDOR_LIBRARY_NAME,
