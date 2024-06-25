@@ -33,6 +33,9 @@ cc_binary {
     header_libs: [
         "libhardware_headers",
     ],
+    include_dirs: [
+        "hardware/rockchip/hdmicec",
+    ],
     shared_libs: [
         "libbinder_ndk",
         "liblog",
@@ -44,24 +47,8 @@ cc_binary {
         "libcutils",
         "libsync",
         "libhardware_legacy",
-    ],
-    static_libs: [
         "hdmi_cec.rk30board",
     ],
 }
 
-cc_fuzz {
-    name: "android.hardware.tv.hdmi.cec-service_fuzzer",
-    defaults: ["service_fuzzer_defaults"],
-    static_libs: [
-        "android.hardware.tv.hdmi.cec-V1-ndk",
-        "liblog",
-    ],
-    srcs: [
-        "fuzzer.cpp",
-        "HdmiCecMock.cpp",
-    ],
-    fuzz_config: {
-        componentid: 826094,
-    },
-}
+
