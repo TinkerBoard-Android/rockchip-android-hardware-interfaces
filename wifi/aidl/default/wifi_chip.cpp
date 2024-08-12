@@ -136,7 +136,9 @@ std::string getPredefinedP2pIfaceName() {
     if ((0 == strncmp(wifi_type, "AP", 2))
 		    || (0 == strncmp(wifi_type, "SPRDWL", 6))
 		    || (0 == strncmp(wifi_type, "AIC", 3))
-		    || (0 == strncmp(wifi_type, "BES2600", 6))) {
+		    || (0 == strncmp(wifi_type, "SKW", 3))
+		    || (0 == strncmp(wifi_type, "BES2600", 6))
+		    || (0 == strncmp(wifi_type, "CYW", 3))) {
         property_set("vendor.wifi.direct.interface", "p2p-dev-wlan0");
         property_get("wifi.direct.interface", buffer.data(), "p2p-dev-wlan0");
     } else {
@@ -1162,7 +1164,9 @@ std::pair<std::vector<std::string>, ndk::ScopedAStatus> WifiChip::getP2pIfaceNam
     if ((0 == strncmp(wifi_type, "AP", 2))
 		    || (0 == strncmp(wifi_type, "SPRDWL", 6))
 		    || (0 == strncmp(wifi_type, "AIC", 3))
-		    || (0 == strncmp(wifi_type, "BES2600", 6))) {
+		    || (0 == strncmp(wifi_type, "SKW", 3))
+		    || (0 == strncmp(wifi_type, "BES2600", 6))
+		    || (0 == strncmp(wifi_type, "CYW", 3))) {
         property_set("vendor.wifi.direct.interface", "p2p-dev-wlan0");
     } else {
         property_set("vendor.wifi.direct.interface", "p2p0");

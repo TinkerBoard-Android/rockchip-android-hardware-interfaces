@@ -29,6 +29,8 @@
 
 static const char* VENDOR_LIBRARY_NAME = "libbt-vendor.so";
 static const char* VENDOR_REALTEK_LIBRARY_NAME = "libbt-vendor-realtek.so";
+static const char* VENDOR_AIC_LIBRARY_NAME = "libbt-vendor-aic.so";
+static const char* VENDOR_SEEKWAVE_LIBRARY_NAME = "libbt-vendor-seekwave.so";
 static const char* VENDOR_LIBRARY_SYMBOL_NAME =
     "BLUETOOTH_VENDOR_LIB_INTERFACE";
 
@@ -226,6 +228,10 @@ bool VendorInterface::Open(InitializeCompleteCallback initialize_complete_cb,
   //if ((0 == strncmp(wifi_type, "RTL", 3)) ||
       //(0 == strncmp(wifi_type, "SSV", 3))) { // for ssv6051 wifi + rtl8761 bt
     strcpy(vendor_lib_name, VENDOR_REALTEK_LIBRARY_NAME);
+  //} else if ((0 == strncmp(wifi_type, "AIC", 3))) {
+    //strcpy(vendor_lib_name, VENDOR_AIC_LIBRARY_NAME);
+  //} else if (0 == strncmp(wifi_type, "SKW", 3)) {
+    //strcpy(vendor_lib_name, VENDOR_SEEKWAVE_LIBRARY_NAME);
   //} else {
     //strcpy(vendor_lib_name, VENDOR_LIBRARY_NAME);
   //}
