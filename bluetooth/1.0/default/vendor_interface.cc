@@ -29,8 +29,8 @@
 
 static const char* VENDOR_LIBRARY_NAME = "libbt-vendor.so";
 static const char* VENDOR_REALTEK_LIBRARY_NAME = "libbt-vendor-realtek.so";
-static const char* VENDOR_AIC_LIBRARY_NAME = "libbt-vendor-aic.so";
-static const char* VENDOR_SEEKWAVE_LIBRARY_NAME = "libbt-vendor-seekwave.so";
+//static const char* VENDOR_AIC_LIBRARY_NAME = "libbt-vendor-aic.so";
+//static const char* VENDOR_SEEKWAVE_LIBRARY_NAME = "libbt-vendor-seekwave.so";
 static const char* VENDOR_LIBRARY_SYMBOL_NAME =
     "BLUETOOTH_VENDOR_LIB_INTERFACE";
 
